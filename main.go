@@ -4,16 +4,22 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"time"
 
 	"github.com/WulfgarW/sensonet/sensonet"
+	"github.com/ernesto-jimenez/httplogger"
+
 	_ "github.com/joho/godotenv/autoload"
 	"golang.org/x/oauth2"
 )
 
 const TOKEN_FILE = ".sensonet-token.json"
 const CREDENTIALS_FILE = ".sensonet-credentials.json"
+
+// Timeout is the default request timeout used by the Helper
+var Timeout = 10 * time.Second
 
 func readCredentials(filename string) (*sensonet.CredentialsStruct, error) {
 	b, err := os.ReadFile(filename)
@@ -48,6 +54,46 @@ func writeToken(filename string, token *oauth2.Token) error {
 	return os.WriteFile(filename, b, 0o644)
 }
 
+type httpLogger struct {
+	log *log.Logger
+}
+
+func newLogger(log *log.Logger) *httpLogger {
+	return &httpLogger{
+		log: log,
+	}
+}
+func (l *httpLogger) LogRequest(req *http.Request) {
+	l.log.Printf(
+		"Request %s %s",
+		req.Method,
+		req.URL.String(),
+	)
+}
+
+func (l *httpLogger) LogResponse(req *http.Request, res *http.Response, err error, duration time.Duration) {
+	duration /= time.Millisecond
+	if err != nil {
+		l.log.Println(err)
+	} else {
+		l.log.Printf(
+			"Response method=%s status=%d durationMs=%d %s",
+			req.Method,
+			res.StatusCode,
+			duration,
+			req.URL.String(),
+		)
+	}
+}
+
+// NewClient creates http client with default transport
+func NewClient(log *log.Logger) *http.Client {
+	return &http.Client{
+		Timeout:   Timeout,
+		Transport: httplogger.NewLoggedTransport(http.DefaultTransport, newLogger(log)),
+	}
+}
+
 func main() {
 	var (
 		logger = log.New(os.Stderr, "sensonet: ", log.Lshortfile)
@@ -68,10 +114,11 @@ func main() {
 	}
 
 	fmt.Println("Third step: Generating new connection to be used for further calls of sensonet library")
-	// Creates an http client and opens the connection to the myVaillant portal.
+	// Opens the connection to the myVaillant portal and returns a connection object for further function calls
 	// If a token is provided, then it's validity is checked and a token refresh called if necessary.
 	// If no token is provided or if a normal refresh is not possible, a login using the credentials is done
-	conn, newToken, err := sensonet.NewConnection(logger, credentials, token)
+	client := NewClient(logger)
+	conn, newToken, err := sensonet.NewConnection(client, credentials, token)
 	if err != nil {
 		logger.Fatal(err)
 	}

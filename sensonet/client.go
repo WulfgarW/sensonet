@@ -4,15 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
-	"time"
-
-	"github.com/ernesto-jimenez/httplogger"
 )
-
-// Timeout is the default request timeout used by the Helper
-var Timeout = 10 * time.Second
 
 var (
 	JSONContent = "application/json"
@@ -32,50 +25,10 @@ type Helper struct {
 	*http.Client
 }
 
-type httpLogger struct {
-	log *log.Logger
-}
-
-func newLogger(log *log.Logger) *httpLogger {
-	return &httpLogger{
-		log: log,
-	}
-}
-func (l *httpLogger) LogRequest(req *http.Request) {
-	l.log.Printf(
-		"Request %s %s",
-		req.Method,
-		req.URL.String(),
-	)
-}
-
-func (l *httpLogger) LogResponse(req *http.Request, res *http.Response, err error, duration time.Duration) {
-	duration /= time.Millisecond
-	if err != nil {
-		l.log.Println(err)
-	} else {
-		l.log.Printf(
-			"Response method=%s status=%d durationMs=%d %s",
-			req.Method,
-			res.StatusCode,
-			duration,
-			req.URL.String(),
-		)
-	}
-}
-
-// NewClient creates http client with default transport
-func NewClient(log *log.Logger) *http.Client {
-	return &http.Client{
-		Timeout:   Timeout,
-		Transport: httplogger.NewLoggedTransport(http.DefaultTransport, newLogger(log)),
-	}
-}
-
 // NewHelper creates http helper for simplified PUT GET logic
-func NewHelper(log *log.Logger) *Helper {
+func NewHelper(client *http.Client) *Helper {
 	return &Helper{
-		Client: NewClient(log),
+		Client: client,
 	}
 }
 

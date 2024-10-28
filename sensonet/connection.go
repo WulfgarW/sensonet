@@ -17,33 +17,33 @@ type Connection struct {
 }
 
 // NewConnection creates a new Sensonet device connection.
-func NewConnection(logger *log.Logger, credentials *CredentialsStruct, token *oauth2.Token) (*Connection, *oauth2.Token, error) {
-	client := NewHelper(logger)
-	identity, err := NewIdentity(logger, credentials)
+func NewConnection(client *http.Client, credentials *CredentialsStruct, token *oauth2.Token) (*Connection, *oauth2.Token, error) {
+	helper := NewHelper(client)
+	identity, err := NewIdentity(helper, credentials)
 	if err != nil {
-		logger.Fatal(err)
+		log.Fatal(err)
 	}
 	var ts oauth2.TokenSource
 	if token == nil {
-		logger.Println("No token provided. Calling login")
+		log.Println("No token provided. Calling login")
 		token, err = identity.Login()
 		if err != nil {
-			logger.Fatal(err)
+			log.Fatal(err)
 		}
 	}
 
 	ts, err = identity.TokenSource(token)
 	if err != nil {
-		logger.Println("Error generating token source from provied token. Calling login")
+		log.Println("Error generating token source from provied token. Calling login")
 		token, err = identity.Login()
 		if err != nil {
-			logger.Fatal(err)
+			log.Fatal(err)
 		}
 		ts, err = identity.TokenSource(token)
 		if err != nil {
-			logger.Fatal(err)
+			log.Fatal(err)
 		}
-		logger.Println("Generating new token source successful")
+		log.Println("Generating new token source successful")
 	}
 
 	client.Transport = &oauth2.Transport{
@@ -52,7 +52,7 @@ func NewConnection(logger *log.Logger, credentials *CredentialsStruct, token *oa
 	}
 
 	conn := &Connection{
-		client:   client,
+		client:   helper,
 		identity: identity,
 	}
 	token, _ = ts.Token()

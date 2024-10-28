@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"html"
 	"io"
-	"log"
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
@@ -41,8 +40,8 @@ type Identity struct {
 	realm    string
 }
 
-func NewIdentity(log *log.Logger, credentials *CredentialsStruct) (*Identity, error) {
-	client := NewHelper(log)
+func NewIdentity(client *Helper, credentials *CredentialsStruct) (*Identity, error) {
+	//client := NewHelper(log)
 	client.Jar, _ = cookiejar.New(nil)
 	client.CheckRedirect = func(req *http.Request, via []*http.Request) error {
 		return http.ErrUseLastResponse
