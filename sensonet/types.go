@@ -23,7 +23,15 @@ const (
 	// SYSTEM_URL     = "/systemcontrol/tli/v1"
 	// FACILITIES_URL = "not to be used"
 	// LIVEREPORT_URL = "/livereport/v1"
-	HOTWATERINDEX_DEFAULT = 255
+	HOTWATERINDEX_DEFAULT                = 255
+	ZONEINDEX_DEFAULT                    = 0
+	ZONEVETOSETPOINT_DEFAULT             = 20.0
+	ZONEVETODURATION_DEFAULT             = 0.5
+	OPERATIONMODE_TIME_CONTROLLED string = "TIME_CONTROLLED"
+	QUICKMODE_HOTWATER            string = "Hotwater Boost"
+	QUICKMODE_HEATING             string = "Heating Quick Veto"
+	QUICKMODE_NOTHING             string = "Charger running idle"
+	QUICKMODE_ERROR_ALREADYON     string = "Error. A quickmode is already running"
 )
 
 type CredentialsStruct struct {
@@ -39,6 +47,23 @@ type TokenRequestStruct struct {
 	SessionState     string `json:"session_state"`
 	Scope            string `json:"scope"`
 }
+
+type HeatingParStruct struct {
+	ZoneIndex    int
+	VetoSetpoint float32
+	VetoDuration float32
+}
+
+type HotwaterParStruct struct {
+	Index int
+}
+
+const (
+	STRATEGY_NONE                  = 0
+	STRATEGY_HOTWATER              = 1
+	STRATEGY_HEATING               = 2
+	STRATEGY_HOTWATER_THEN_HEATING = 3
+)
 
 type Homes []struct {
 	HomeName string `json:"homeName"`
@@ -129,6 +154,34 @@ type SystemStatus struct {
 		DomesticHotWater []ConfigurationDomesticHotWater `json:"domesticHotWater"`
 		// Ventilations
 	} `json:"configuration"`
+}
+
+type DhwData struct {
+	State         StateDhw
+	Properties    PropertiesDhw
+	Configuration ConfigurationDhw
+}
+
+type DomesticHotWaterData struct {
+	State         StateDomesticHotWater
+	Properties    PropertiesDomesticHotWater
+	Configuration ConfigurationDomesticHotWater
+}
+
+type ZoneData struct {
+	State         StateZone
+	Properties    PropertiesZone
+	Configuration ConfigurationZone
+}
+
+type HomesAndSystems struct {
+	Homes   Homes
+	Systems []SystemAndId
+}
+
+type SystemAndId struct {
+	SystemId     string
+	SystemStatus SystemStatus
 }
 
 type StateZone struct {

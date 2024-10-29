@@ -143,8 +143,8 @@ func main() {
 	}
 
 	fmt.Printf("   OutdoorTemperature: %.1f°C\n", state.State.System.OutdoorTemperature)
-	for i, c := range state.State.Circuits {
-		fmt.Printf("   Zone %s: %.1f°C (Setpoint=%.1f°C)\n", state.Configuration.Zones[i].General.Name, c.CurrentCircuitFlowTemperature, c.HeatingCircuitFlowSetpoint)
+	for i, c := range state.State.Zones {
+		fmt.Printf("   Zone %s: %.1f°C (Setpoint=%.1f°C)\n", state.Configuration.Zones[i].General.Name, c.CurrentRoomTemperature, c.DesiredRoomTemperatureSetpoint)
 	}
 	if len(state.State.DomesticHotWater)*len(state.Configuration.DomesticHotWater) > 0 {
 		fmt.Printf("   HotWaterTemperature: %.1f°C (Setpoint=%.1f°C)\n", state.State.DomesticHotWater[0].CurrentDomesticHotWaterTemperature, state.Configuration.DomesticHotWater[0].TappingSetpoint)
@@ -154,16 +154,16 @@ func main() {
 	}
 
 	/*fmt.Println("Next step: Starting zone quick veto")
-	err = conn.StartZoneQuickVeto(systemID, 0, 19.0, 0.5)
+	err = conn.StartZoneQuickVeto(systemID, 0, 18.0, 0.5)
 	if err != nil {
 		logger.Println(err)
 	}*/
 
-	fmt.Println("Next step: Stopping zone quick veto")
+	/*fmt.Println("Next step: Stopping zone quick veto")
 	err = conn.StopZoneQuickVeto(systemID, 0)
 	if err != nil {
 		logger.Println(err)
-	}
+	}*/
 
 	/*fmt.Println("Next step: Starting hotwater boost")
 	err = conn.StartHotWaterBoost(systemID, -1)
@@ -177,17 +177,43 @@ func main() {
 		logger.Println(err)
 	}*/
 
+	var heatingPar sensonet.HeatingParStruct
+	var hotwaterPar sensonet.HotwaterParStruct
+	heatingPar.ZoneIndex = 0
+	heatingPar.VetoSetpoint = 18.0
+	heatingPar.VetoDuration = -1.0 //negative value means: use default
+	hotwaterPar.Index = -1
+	fmt.Println("Next step: Starting strategy based session")
+	result, err := conn.StartStrategybased(systemID, sensonet.STRATEGY_HOTWATER_THEN_HEATING, &heatingPar, &hotwaterPar)
+	if err != nil {
+		logger.Println(err)
+	} else {
+		fmt.Println("result=", result)
+	}
+
 	// Test, if the token refresh routine works as expected
-	fmt.Println("Next step: Test, if the token refresh routine works as expected. Takes about 15 minutes")
+	fmt.Println("Next step: Test, if the token refresh routine works as expected. Takes about 5 minutes")
 	start := time.Now()
-	for time.Now().Before(start.Add(15 * time.Minute)) {
-		time.Sleep(time.Minute)
+	for time.Now().Before(start.Add(5 * time.Minute)) {
+		time.Sleep(10 * time.Second)
+		time.Sleep(10 * time.Second)
+		time.Sleep(10 * time.Second)
 		state, err := conn.GetSystem(systemID)
 		if err != nil {
 			logger.Fatal(err)
 		}
 		fmt.Println("   It is now:", time.Now())
-		fmt.Printf("   OutdoorTemperature: %.1f°C\n", state.State.System.OutdoorTemperature)
+		dhwData := sensonet.GetDhwData(state, -1)
+		zoneData := sensonet.GetZoneData(state, heatingPar.ZoneIndex)
+		fmt.Printf("   Quickmodes: Dhw: %s  Zone: %s\n", dhwData.State.CurrentSpecialFunction, zoneData.State.CurrentSpecialFunction)
+	}
+
+	fmt.Println("Next step: Stopping strategy based session")
+	result2, err := conn.StopStrategybased(systemID, sensonet.STRATEGY_HOTWATER_THEN_HEATING, &heatingPar, &hotwaterPar)
+	if err != nil {
+		logger.Println(err)
+	} else {
+		fmt.Println("result=", result2)
 	}
 
 }

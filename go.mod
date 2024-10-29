@@ -4,6 +4,8 @@ go 1.23.0
 
 require (
 	dario.cat/mergo v1.0.1
+	github.com/asaskevich/EventBus v0.0.0-20200907212545-49d423059eef
+	github.com/benbjohnson/clock v1.3.5
 	github.com/coreos/go-oidc/v3 v3.11.0
 	github.com/ernesto-jimenez/httplogger v0.0.0-20220128121225-117514c3f345
 	github.com/joho/godotenv v1.5.1
