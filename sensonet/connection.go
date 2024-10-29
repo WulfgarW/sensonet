@@ -381,7 +381,7 @@ func (c *Connection) WhichQuickMode(dhwData *DhwData, zoneData *ZoneData, strate
 	//log.Printf("Checking if hot water boost possible. Operation Mode = %s, temperature setpoint= %02.2f, live temperature= %02.2f", res.Hotwater.OperationMode, res.Hotwater.HotwaterTemperatureSetpoint, res.Hotwater.HotwaterLiveTemperature)
 	// For strategy=STRATEGY_HOTWATER, a hotwater boost is possible when hotwater storage temperature is less than the temperature setpoint.
 	// For other strategies, a hotwater boost is possible when hotwater storage temperature is less than the temperature setpoint minus 5°C
-	addOn := -15.0
+	addOn := -5.0
 	if strategy == STRATEGY_HOTWATER {
 		addOn = 0.0
 	}
