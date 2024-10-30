@@ -20,6 +20,7 @@ type Connection struct {
 	cache                time.Duration
 	currentQuickmode     string
 	quickmodeStarted     time.Time
+	quickmodeStopped     time.Time
 }
 
 // NewConnection creates a new Sensonet device connection.
@@ -60,8 +61,9 @@ func NewConnection(client *http.Client, credentials *CredentialsStruct, token *o
 		client:           helper,
 		identity:         identity,
 		cache:            90 * time.Second,
-		currentQuickmode: "",
+		currentQuickmode: "", // assuming that no quick mode is active
 		quickmodeStarted: time.Now(),
+		quickmodeStopped: time.Now().Add(-2 * time.Minute), //time stamp is set in the past so that first call of refreshCurrentQuickMode() changes currentQuickmode if necessary
 	}
 	token, _ = ts.Token()
 
@@ -72,6 +74,10 @@ func NewConnection(client *http.Client, credentials *CredentialsStruct, token *o
 	}, conn.cache)
 
 	return conn, token, nil
+}
+
+func (c *Connection) GetCurrentQuickMode() string {
+	return c.currentQuickmode
 }
 
 // Returns the http header for http requests to sensonet
@@ -138,9 +144,16 @@ func (c *Connection) refreshCurrentQuickMode(state *SystemStatus) {
 		}
 	}
 	if newQuickMode != c.currentQuickmode {
-		log.Printf("Old quickmode: %s   New quickmode: %s", c.currentQuickmode, newQuickMode)
-		c.currentQuickmode = newQuickMode
-		c.quickmodeStarted = time.Now()
+		if newQuickMode != "" && time.Now().Before(c.quickmodeStarted.Add(c.cache)) {
+			log.Printf("Old quickmode: %s   New quickmode: %s", c.currentQuickmode, newQuickMode)
+			c.currentQuickmode = newQuickMode
+			c.quickmodeStopped = time.Now()
+		}
+		if newQuickMode == "" && time.Now().Before(c.quickmodeStopped.Add(c.cache)) {
+			log.Printf("Old quickmode: %s   New quickmode: %s", c.currentQuickmode, newQuickMode)
+			c.currentQuickmode = newQuickMode
+			c.quickmodeStarted = time.Now()
+		}
 	}
 }
 
@@ -369,7 +382,7 @@ func (c *Connection) StopStrategybased(systemId string, strategy int, heatingPar
 		log.Println("Nothing to do, no quick mode active")
 	}
 	c.currentQuickmode = ""
-	c.quickmodeStarted = time.Now()
+	c.quickmodeStopped = time.Now()
 
 	return c.currentQuickmode, err
 }

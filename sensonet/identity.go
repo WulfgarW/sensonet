@@ -23,6 +23,9 @@ const REALM_GERMANY = "vaillant-germany-b2c"
 
 var Oauth2Config = Oauth2ConfigForRealm(REALM_GERMANY)
 
+// Timeout is the default request timeout used by the Helper
+var timeout = 10 * time.Second
+
 func Oauth2ConfigForRealm(realm string) *oauth2.Config {
 	return &oauth2.Config{
 		Endpoint: oauth2.Endpoint{
@@ -35,6 +38,7 @@ func Oauth2ConfigForRealm(realm string) *oauth2.Config {
 
 type Identity struct {
 	client   *Helper
+	trclient *Helper //seperate client for token refresh
 	user     string
 	password string
 	realm    string
@@ -46,9 +50,15 @@ func NewIdentity(client *Helper, credentials *CredentialsStruct) (*Identity, err
 	client.CheckRedirect = func(req *http.Request, via []*http.Request) error {
 		return http.ErrUseLastResponse
 	}
+	trclient := NewHelper(newClient())
+	trclient.Jar, _ = cookiejar.New(nil)
+	trclient.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+		return http.ErrUseLastResponse
+	}
 
 	v := &Identity{
 		client:   client,
+		trclient: trclient,
 		user:     credentials.User,
 		password: credentials.Password,
 		realm:    credentials.Realm,
@@ -58,6 +68,15 @@ func NewIdentity(client *Helper, credentials *CredentialsStruct) (*Identity, err
 	}
 	Oauth2Config = Oauth2ConfigForRealm(v.realm)
 	return v, nil
+}
+
+// newClient creates http client with default transport
+// func newClient(log *log.Logger) *http.Client {
+func newClient() *http.Client {
+	return &http.Client{
+		Timeout: timeout,
+		//Transport: httplogger.NewLoggedTransport(http.DefaultTransport, newLogger(log)),
+	}
 }
 
 func (v *Identity) Login() (*oauth2.Token, error) {
@@ -228,7 +247,7 @@ func (v *Identity) RefreshToken(token *oauth2.Token) (*oauth2.Token, error) {
 	req, _ := http.NewRequest("POST", uri, strings.NewReader(params.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
-	if err := v.client.DoJSON(req, &res); err != nil {
+	if err := v.trclient.DoJSON(req, &res); err != nil {
 		return nil, err
 	}
 

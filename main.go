@@ -192,12 +192,10 @@ func main() {
 	}
 
 	// Test, if the token refresh routine works as expected
-	fmt.Println("Next step: Test, if the token refresh routine works as expected. Takes about 5 minutes")
+	fmt.Println("Next step: Test, if the token refresh routine works as expected. Takes about 10 minutes")
 	start := time.Now()
-	for time.Now().Before(start.Add(5 * time.Minute)) {
-		time.Sleep(10 * time.Second)
-		time.Sleep(10 * time.Second)
-		time.Sleep(10 * time.Second)
+	for time.Now().Before(start.Add(10 * time.Minute)) {
+		time.Sleep(60 * time.Second)
 		state, err := conn.GetSystem(systemID)
 		if err != nil {
 			logger.Fatal(err)
@@ -205,7 +203,7 @@ func main() {
 		fmt.Println("   It is now:", time.Now())
 		dhwData := sensonet.GetDhwData(state, -1)
 		zoneData := sensonet.GetZoneData(state, heatingPar.ZoneIndex)
-		fmt.Printf("   Quickmodes: Dhw: %s  Zone: %s\n", dhwData.State.CurrentSpecialFunction, zoneData.State.CurrentSpecialFunction)
+		fmt.Printf("   Quickmodes: internal: %s  heat pump: Dhw: %s  Zone: %s\n", conn.GetCurrentQuickMode(), dhwData.State.CurrentSpecialFunction, zoneData.State.CurrentSpecialFunction)
 	}
 
 	fmt.Println("Next step: Stopping strategy based session")
