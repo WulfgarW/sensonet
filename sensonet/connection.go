@@ -144,12 +144,12 @@ func (c *Connection) refreshCurrentQuickMode(state *SystemStatus) {
 		}
 	}
 	if newQuickMode != c.currentQuickmode {
-		if newQuickMode != "" && time.Now().Before(c.quickmodeStarted.Add(c.cache)) {
+		if newQuickMode != "" && time.Now().After(c.quickmodeStarted.Add(c.cache)) {
 			log.Printf("Old quickmode: %s   New quickmode: %s", c.currentQuickmode, newQuickMode)
 			c.currentQuickmode = newQuickMode
 			c.quickmodeStopped = time.Now()
 		}
-		if newQuickMode == "" && time.Now().Before(c.quickmodeStopped.Add(c.cache)) {
+		if newQuickMode == "" && time.Now().After(c.quickmodeStopped.Add(c.cache)) {
 			log.Printf("Old quickmode: %s   New quickmode: %s", c.currentQuickmode, newQuickMode)
 			c.currentQuickmode = newQuickMode
 			c.quickmodeStarted = time.Now()
