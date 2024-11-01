@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"time"
 
-	//"github.com/evcc-io/evcc/provider"
 	"golang.org/x/oauth2"
 )
 
@@ -114,8 +113,6 @@ func (c *Connection) getHomesAndSystems(res *HomesAndSystems) error {
 		systemAndId.SystemId = home.SystemID
 		systemAndId.SystemStatus = state
 		if len(res.Systems) <= i {
-			//If relData.Zones array is not big enough, new elements are appended, especially at first ExtractSystem call
-			//At the moment, relData.Zones is not shortened, if later GetSystem calls returns less system.Body.Zones
 			res.Systems = append(res.Systems, systemAndId)
 
 		} else {
@@ -144,13 +141,13 @@ func (c *Connection) refreshCurrentQuickMode(state *SystemStatus) {
 		}
 	}
 	if newQuickMode != c.currentQuickmode {
-		if newQuickMode != "" && time.Now().After(c.quickmodeStarted.Add(c.cache)) {
-			log.Printf("Old quickmode: %s   New quickmode: %s", c.currentQuickmode, newQuickMode)
+		if newQuickMode == "" && time.Now().After(c.quickmodeStarted.Add(c.cache)) {
+			log.Printf("Old quickmode: \"%s\"   New quickmode: \"%s\"", c.currentQuickmode, newQuickMode)
 			c.currentQuickmode = newQuickMode
 			c.quickmodeStopped = time.Now()
 		}
-		if newQuickMode == "" && time.Now().After(c.quickmodeStopped.Add(c.cache)) {
-			log.Printf("Old quickmode: %s   New quickmode: %s", c.currentQuickmode, newQuickMode)
+		if newQuickMode != "" && time.Now().After(c.quickmodeStopped.Add(c.cache)) {
+			log.Printf("Old quickmode: \"%s\"   New quickmode: \"%s\"", c.currentQuickmode, newQuickMode)
 			c.currentQuickmode = newQuickMode
 			c.quickmodeStarted = time.Now()
 		}
@@ -305,9 +302,6 @@ func (c *Connection) StartStrategybased(systemId string, strategy int, heatingPa
 		return QUICKMODE_ERROR_ALREADYON, err
 	}
 
-	/*if d.currentQuickmode == "" && d.quickmodeStopped.After(d.quickmodeStarted) && d.quickmodeStopped.Add(2*time.Minute).After(time.Now()) {
-		enable = false
-	}*/
 	whichQuickMode := c.WhichQuickMode(dhwData, zoneData, strategy, heatingPar, hotwaterPar)
 	log.Println("WhichQuickMode()=", whichQuickMode)
 
@@ -346,6 +340,7 @@ func (c *Connection) StartStrategybased(systemId string, strategy int, heatingPa
 		log.Println("Enable called but no quick mode possible. Starting idle mode")
 	}
 
+	c.homesAndSystemsCache.Reset()
 	return c.currentQuickmode, err
 }
 
@@ -384,6 +379,7 @@ func (c *Connection) StopStrategybased(systemId string, strategy int, heatingPar
 	c.currentQuickmode = ""
 	c.quickmodeStopped = time.Now()
 
+	c.homesAndSystemsCache.Reset()
 	return c.currentQuickmode, err
 }
 

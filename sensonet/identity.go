@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"html"
 	"io"
+	"log"
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
@@ -45,7 +46,6 @@ type Identity struct {
 }
 
 func NewIdentity(client *Helper, credentials *CredentialsStruct) (*Identity, error) {
-	//client := NewHelper(log)
 	client.Jar, _ = cookiejar.New(nil)
 	client.CheckRedirect = func(req *http.Request, via []*http.Request) error {
 		return http.ErrUseLastResponse
@@ -252,6 +252,7 @@ func (v *Identity) RefreshToken(token *oauth2.Token) (*oauth2.Token, error) {
 	}
 
 	res.Expiry = time.Now().Add(time.Duration(res.ExpiresIn) * time.Second)
+	log.Println("RefreshToken successful. New expiry:", res.Expiry)
 
 	return &res.Token, nil
 }

@@ -188,7 +188,7 @@ func main() {
 	if err != nil {
 		logger.Println(err)
 	} else {
-		fmt.Println("result=", result)
+		fmt.Printf("result=\"%s\"\n", result)
 	}
 
 	// Test, if the token refresh routine works as expected
@@ -203,7 +203,7 @@ func main() {
 		fmt.Println("   It is now:", time.Now())
 		dhwData := sensonet.GetDhwData(state, -1)
 		zoneData := sensonet.GetZoneData(state, heatingPar.ZoneIndex)
-		fmt.Printf("   Quickmodes: internal: %s  heat pump: Dhw: %s  Zone: %s\n", conn.GetCurrentQuickMode(), dhwData.State.CurrentSpecialFunction, zoneData.State.CurrentSpecialFunction)
+		fmt.Printf("   Quickmodes: internal: \"%s\"  heat pump: Dhw: \"%s\"  Zone: \"%s\"\n", conn.GetCurrentQuickMode(), dhwData.State.CurrentSpecialFunction, zoneData.State.CurrentSpecialFunction)
 	}
 
 	fmt.Println("Next step: Stopping strategy based session")
@@ -211,7 +211,7 @@ func main() {
 	if err != nil {
 		logger.Println(err)
 	} else {
-		fmt.Println("result=", result2)
+		fmt.Printf("result=\"%s\"\n", result2)
 	}
 
 }
