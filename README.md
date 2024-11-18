@@ -13,7 +13,7 @@ The communication works via the myVaillant portal and the sensonet module (VR921
 - Starting and stopping of hotwater boosts and of zone quick veto sessions
 - Starting and stopping of strategy baseds quick mode sessions
 
-## Ackknowledgements
+## Acknowledgements
 
 Which Vaillant urls to use and which and how data have to be sent to the Vaillant API are partly inspired by the myPyllant project of signalkraft. Many thanks for that! 
  
