@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"time"
 
+	"net/url"
+
 	"golang.org/x/oauth2"
 )
 
@@ -109,9 +111,17 @@ func (c *Connection) getHomesAndSystems(res *HomesAndSystems) error {
 		if err := c.client.DoJSON(req, &state); err != nil {
 			return fmt.Errorf("error getting state for home %s: %w", home.HomeName, err)
 		}
+		var systemDevices SystemDevices
+		url = API_URL_BASE + fmt.Sprintf(DEVICES_URL, home.SystemID)
+		req, _ = http.NewRequest("GET", url, nil)
+		req.Header = c.getSensonetHttpHeader()
+		if err := c.client.DoJSON(req, &systemDevices); err != nil {
+			return fmt.Errorf("error getting device data: %w", err)
+		}
 		var systemAndId SystemAndId
 		systemAndId.SystemId = home.SystemID
 		systemAndId.SystemStatus = state
+		systemAndId.SystemDevices = systemDevices
 		if len(res.Systems) <= i {
 			res.Systems = append(res.Systems, systemAndId)
 
@@ -142,9 +152,13 @@ func (c *Connection) refreshCurrentQuickMode(state *SystemStatus) {
 	}
 	if newQuickMode != c.currentQuickmode {
 		if newQuickMode == "" && time.Now().After(c.quickmodeStarted.Add(c.cache)) {
-			log.Printf("Old quickmode: \"%s\"   New quickmode: \"%s\"", c.currentQuickmode, newQuickMode)
-			c.currentQuickmode = newQuickMode
-			c.quickmodeStopped = time.Now()
+			if c.currentQuickmode == QUICKMODE_NOTHING && time.Now().Before(c.quickmodeStarted.Add(10*time.Minute)) {
+				log.Println("Idle mode active for less then 10 minutes. Keeping the idle mode")
+			} else {
+				log.Printf("Old quickmode: \"%s\"   New quickmode: \"%s\"", c.currentQuickmode, newQuickMode)
+				c.currentQuickmode = newQuickMode
+				c.quickmodeStopped = time.Now()
+			}
 		}
 		if newQuickMode != "" && time.Now().After(c.quickmodeStopped.Add(c.cache)) {
 			log.Printf("Old quickmode: \"%s\"   New quickmode: \"%s\"", c.currentQuickmode, newQuickMode)
@@ -173,12 +187,27 @@ func (c *Connection) GetSystem(systemid string) (SystemStatus, error) {
 	if err != nil {
 		return systemAndId.SystemStatus, fmt.Errorf("error getting sytem: %w", err)
 	}
-	for _, state := range homesAndSystems.Systems {
-		if state.SystemId == systemid {
-			return state.SystemStatus, nil
+	for _, sys := range homesAndSystems.Systems {
+		if sys.SystemId == systemid {
+			return sys.SystemStatus, nil
 		}
 	}
 	return systemAndId.SystemStatus, nil
+}
+
+// Returns the system devices for a specific systemId
+func (c *Connection) getSystemDevices(systemid string) (SystemDevices, error) {
+	var systemAndId SystemAndId
+	homesAndSystems, err := c.homesAndSystemsCache.Get()
+	if err != nil {
+		return systemAndId.SystemDevices, fmt.Errorf("error getting sytem: %w", err)
+	}
+	for _, sys := range homesAndSystems.Systems {
+		if sys.SystemId == systemid {
+			return sys.SystemDevices, nil
+		}
+	}
+	return systemAndId.SystemDevices, nil
 }
 
 func (c *Connection) StartZoneQuickVeto(systemId string, zone int, setpoint float32, duration float32) error {
@@ -434,4 +463,51 @@ func (c *Connection) WhichQuickMode(dhwData *DhwData, zoneData *ZoneData, strate
 		}
 	}
 	return whichQuickMode
+}
+
+// Returns the device data for give criteria
+func (c *Connection) GetDeviceData(systemid string, whichDevices int) ([]DeviceAndInfo, error) {
+	var devices []DeviceAndInfo
+	systemDevices, err := c.getSystemDevices(systemid)
+	if err != nil {
+		return devices, fmt.Errorf("error getting sytem devices for %s: %w", systemid, err)
+	}
+	var deviceAndInfo DeviceAndInfo
+	if systemDevices.PrimaryHeatGenerator.DeviceUUID != "" && (whichDevices == DEVICES_PRIMARY_HEATER || whichDevices == DEVICES_ALL) {
+		deviceAndInfo.Device = systemDevices.PrimaryHeatGenerator
+		deviceAndInfo.Info = "primary_heat_generator"
+		devices = append(devices, deviceAndInfo)
+	}
+	if whichDevices == DEVICES_SECONDARY_HEATER || whichDevices == DEVICES_ALL {
+		for _, secHeatGen := range systemDevices.SecondaryHeatGenerators {
+			deviceAndInfo.Device = secHeatGen
+			deviceAndInfo.Info = "secondary_heat_generator"
+			devices = append(devices, deviceAndInfo)
+		}
+	}
+
+	if systemDevices.ElectricBackupHeater.DeviceUUID != "" && (whichDevices == DEVICES_BACKUP_HEATER || whichDevices == DEVICES_ALL) {
+		deviceAndInfo.Device = systemDevices.ElectricBackupHeater
+		deviceAndInfo.Info = "electric_backup_heater"
+		devices = append(devices, deviceAndInfo)
+	}
+	return devices, nil
+}
+
+// Returns the energy data systemId
+func (c *Connection) GetEnergyData(systemid, deviceUuid, operationMode, energyType, resolution string, startDate, endDate time.Time) (EnergyData, error) {
+	var energyData EnergyData
+	v := url.Values{}
+	v.Set("resolution", resolution)
+	v.Add("operationMode", operationMode)
+	v.Add("energyType", energyType)
+	v.Add("startDate", startDate.Format("2006-01-02T15:04:05-07:00"))
+	v.Add("endDate", endDate.Format("2006-01-02T15:04:05-07:00"))
+	url := API_URL_BASE + fmt.Sprintf(ENERGY_URL, systemid, deviceUuid) + v.Encode()
+	req, _ := http.NewRequest("GET", url, nil)
+	req.Header = c.getSensonetHttpHeader()
+	if err := c.client.DoJSON(req, &energyData); err != nil {
+		return energyData, fmt.Errorf("error getting energy data for %s: %w", deviceUuid, err)
+	}
+	return energyData, nil
 }

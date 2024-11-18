@@ -19,6 +19,8 @@ const (
 const (
 	HOTWATERBOOST_URL = "/systems/%s/tli/domestic-hot-water/%01d/boost"
 	ZONEQUICKVETO_URL = "/systems/%s/tli/zones/%01d/quick-veto"
+	DEVICES_URL       = "/emf/v2/%s/currentSystem"
+	ENERGY_URL        = "/emf/v2/%s/devices/%s/buckets?"
 
 	// SYSTEM_URL     = "/systemcontrol/tli/v1"
 	// FACILITIES_URL = "not to be used"
@@ -32,6 +34,26 @@ const (
 	QUICKMODE_HEATING             string = "Heating Quick Veto"
 	QUICKMODE_NOTHING             string = "Charger running idle"
 	QUICKMODE_ERROR_ALREADYON     string = "Error. A quickmode is already running"
+)
+
+const (
+	STRATEGY_NONE                  = 0
+	STRATEGY_HOTWATER              = 1
+	STRATEGY_HEATING               = 2
+	STRATEGY_HOTWATER_THEN_HEATING = 3
+)
+
+const (
+	DEVICES_ALL              = 0
+	DEVICES_PRIMARY_HEATER   = 1
+	DEVICES_SECONDARY_HEATER = 2
+	DEVICES_BACKUP_HEATER    = 3
+)
+
+const (
+	RESOLUTION_HOUR  = "HOUR"
+	RESOLUTION_DAY   = "DAY"
+	RESOLUTION_MONTH = "MONTH"
 )
 
 type CredentialsStruct struct {
@@ -57,13 +79,6 @@ type HeatingParStruct struct {
 type HotwaterParStruct struct {
 	Index int
 }
-
-const (
-	STRATEGY_NONE                  = 0
-	STRATEGY_HOTWATER              = 1
-	STRATEGY_HEATING               = 2
-	STRATEGY_HOTWATER_THEN_HEATING = 3
-)
 
 type Homes []struct {
 	HomeName string `json:"homeName"`
@@ -180,8 +195,9 @@ type HomesAndSystems struct {
 }
 
 type SystemAndId struct {
-	SystemId     string
-	SystemStatus SystemStatus
+	SystemId      string
+	SystemStatus  SystemStatus
+	SystemDevices SystemDevices
 }
 
 type StateZone struct {
@@ -313,4 +329,66 @@ type ConfigurationDomesticHotWater struct {
 	HolidayEndDateTime            time.Time   `json:"holidayEndDateTime"`
 	TimeProgramDomesticHotWater   TimeProgram `json:"timeProgramDomesticHotWater"`
 	TimeProgramCirculationPump    TimeProgram `json:"timeProgramCirculationPump"`
+}
+
+type EnergyData struct {
+	ExtraFields struct {
+		Timezone string `json:"timezone"`
+	} `json:"extra_fields"`
+	OperationMode string `json:"operationMode"`
+	//	SkipDataUpdate   bool    `json:"skip_data_update"`
+	//	DataFrom         any     `json:"data_from"`
+	//	DataTo           any     `json:"data_to"`
+	StartDate  time.Time `json:"startDate"`
+	EndDate    time.Time `json:"endDate"`
+	Resolution string    `json:"resolution"`
+	EnergyType string    `json:"energyType"`
+	//	ValueType        any     `json:"valueType"`
+	//	Calculated       any     `json:"calculated"`
+	TotalConsumption float64 `json:"totalConsumption"`
+	Data             []struct {
+		ExtraFields struct {
+			Timezone string `json:"timezone"`
+		} `json:"extra_fields"`
+		StartDate time.Time `json:"startDate"`
+		EndDate   time.Time `json:"endDate"`
+		Value     float64   `json:"value"`
+	} `json:"data"`
+}
+
+type Device struct {
+	DeviceUUID         string    `json:"device_uuid"`
+	EbusID             string    `json:"ebus_id"`
+	Spn                int       `json:"spn"`
+	BusCouplerAddress  int       `json:"bus_coupler_address"`
+	ArticleNumber      string    `json:"article_number"`
+	EmfValid           bool      `json:"emfValid"`
+	DeviceSerialNumber string    `json:"device_serial_number"`
+	DeviceType         string    `json:"device_type"`
+	FirstData          time.Time `json:"first_data"`
+	LastData           time.Time `json:"last_data"`
+	Data               []struct {
+		OperationMode string    `json:"operation_mode"`
+		ValueType     string    `json:"value_type"`
+		Calculated    bool      `json:"calculated"`
+		From          time.Time `json:"from"`
+		To            time.Time `json:"to"`
+	} `json:"data"`
+	ProductName string `json:"product_name"`
+}
+
+type SystemDevices struct {
+	SystemType              string   `json:"system_type"`
+	HasEmfCapableDevices    bool     `json:"has_emf_capable_devices"`
+	PrimaryHeatGenerator    Device   `json:"primary_heat_generator"`
+	SecondaryHeatGenerators []Device `json:"secondary_heat_generators"`
+	ElectricBackupHeater    Device   `json:"electric_backup_heater"`
+	SolarStation            any      `json:"solar_station"`
+	Ventilation             any      `json:"ventilation"`
+	Gateway                 any      `json:"gateway"`
+}
+
+type DeviceAndInfo struct {
+	Device Device
+	Info   string
 }
