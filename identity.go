@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"html"
 	"io"
-	"log"
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
@@ -14,15 +13,10 @@ import (
 
 	"github.com/coreos/go-oidc/v3/oidc"
 
-	"sync"
-
-	"dario.cat/mergo"
 	"golang.org/x/oauth2"
 )
 
 const REALM_GERMANY = "vaillant-germany-b2c"
-
-var Oauth2Config = Oauth2ConfigForRealm(REALM_GERMANY)
 
 // Timeout is the default request timeout used by the Helper
 var timeout = 10 * time.Second
@@ -38,35 +32,27 @@ func Oauth2ConfigForRealm(realm string) *oauth2.Config {
 }
 
 type Identity struct {
-	client   *Helper
-	trclient *Helper //seperate client for token refresh
+	client   httpDoer
 	user     string
 	password string
 	realm    string
+	oc       *oauth2.Config
 }
 
-func NewIdentity(client *Helper, credentials *CredentialsStruct) (*Identity, error) {
+func NewIdentity(client *http.Client, credentials *CredentialsStruct) (*Identity, error) {
 	client.Jar, _ = cookiejar.New(nil)
 	client.CheckRedirect = func(req *http.Request, via []*http.Request) error {
-		return http.ErrUseLastResponse
-	}
-	trclient := NewHelper(newClient())
-	trclient.Jar, _ = cookiejar.New(nil)
-	trclient.CheckRedirect = func(req *http.Request, via []*http.Request) error {
 		return http.ErrUseLastResponse
 	}
 
 	v := &Identity{
 		client:   client,
-		trclient: trclient,
 		user:     credentials.User,
 		password: credentials.Password,
 		realm:    credentials.Realm,
+		oc:       Oauth2ConfigForRealm(credentials.Realm),
 	}
-	if credentials.Realm == "" {
-		v.realm = REALM_GERMANY
-	}
-	Oauth2Config = Oauth2ConfigForRealm(v.realm)
+
 	return v, nil
 }
 
@@ -75,11 +61,11 @@ func NewIdentity(client *Helper, credentials *CredentialsStruct) (*Identity, err
 func newClient() *http.Client {
 	return &http.Client{
 		Timeout: timeout,
-		//Transport: httplogger.NewLoggedTransport(http.DefaultTransport, newLogger(log)),
+		// Transport: httplogger.NewLoggedTransport(http.DefaultTransport, newLogger(log)),
 	}
 }
 
-func (v *Identity) Login() (*oauth2.Token, error) {
+func (v *Identity) Login() (oauth2.TokenSource, error) {
 	cv := oauth2.GenerateVerifier()
 
 	data := url.Values{
@@ -91,7 +77,7 @@ func (v *Identity) Login() (*oauth2.Token, error) {
 		"code_challenge":        {oauth2.S256ChallengeFromVerifier(cv)},
 	}
 
-	uri := fmt.Sprintf(AUTH_URL, v.realm) + "?" + data.Encode()
+	uri := v.oc.Endpoint.AuthURL + "?" + data.Encode()
 	req, _ := http.NewRequest("GET", uri, nil)
 
 	resp, err := v.client.Do(req)
@@ -115,7 +101,7 @@ func (v *Identity) Login() (*oauth2.Token, error) {
 		return nil, errors.New("missing code")
 	}
 
-	uri = computeLoginUrl(string(body), v.realm)
+	uri = v.computeLoginUrl(string(body))
 	if uri == "" {
 		return nil, errors.New("missing login url")
 	}
@@ -152,78 +138,22 @@ func (v *Identity) Login() (*oauth2.Token, error) {
 		"redirect_uri":  {"enduservaillant.page.link://login"},
 	}
 
-	uri = fmt.Sprintf(TOKEN_URL, v.realm)
-	req, _ = http.NewRequest("POST", uri, strings.NewReader(params.Encode()))
+	req, _ = http.NewRequest("POST", v.oc.Endpoint.TokenURL, strings.NewReader(params.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
-	if err := v.client.DoJSON(req, &token); err != nil {
+	if err := doJSON(v.client, req, &token); err != nil {
 		return nil, fmt.Errorf("could not get token: %w", err)
 	}
 
 	token.Expiry = time.Now().Add(time.Duration(token.ExpiresIn) * time.Second)
 
-	return &token.Token, nil
+	ts := refreshTokenSource(&token.Token, v)
+
+	return ts, nil
 }
 
-type TokenRefresher interface {
-	RefreshToken(token *oauth2.Token) (*oauth2.Token, error)
-}
-
-type TokenSource struct {
-	mu        sync.Mutex
-	token     *oauth2.Token
-	refresher TokenRefresher
-}
-
-func RefreshTokenSource(token *oauth2.Token, refresher TokenRefresher) oauth2.TokenSource {
-	if token == nil {
-		// allocate an (expired) token or mergeToken will fail
-		token = new(oauth2.Token)
-	}
-
-	ts := &TokenSource{
-		token:     token,
-		refresher: refresher,
-	}
-
-	return ts
-}
-
-func (ts *TokenSource) Token() (*oauth2.Token, error) {
-	ts.mu.Lock()
-	defer ts.mu.Unlock()
-
-	if ts.token.Valid() {
-		return ts.token, nil
-	}
-
-	token, err := ts.refresher.RefreshToken(ts.token)
-	if err != nil {
-		return ts.token, err
-	}
-
-	if token.AccessToken == "" {
-		err = errors.New("token refresh failed to obtain access token")
-	} else {
-		err = ts.mergeToken(token)
-	}
-
-	return ts.token, err
-}
-
-// mergeToken updates a token while preventing wiping the refresh token
-func (ts *TokenSource) mergeToken(t *oauth2.Token) error {
-	return mergo.Merge(ts.token, t, mergo.WithOverride)
-}
-
-func (v *Identity) TokenSource(token *oauth2.Token) (oauth2.TokenSource, error) {
-	ts := oauth2.ReuseTokenSource(token, RefreshTokenSource(token, v))
-	_, err := ts.Token()
-	return ts, err
-}
-
-func computeLoginUrl(body, realm string) string {
-	url := fmt.Sprintf(LOGIN_URL, realm)
+func (v *Identity) computeLoginUrl(body string) string {
+	url := fmt.Sprintf(LOGIN_URL, v.realm)
 	index1 := strings.Index(body, "authenticate?")
 	if index1 < 0 {
 		return ""
@@ -236,23 +166,26 @@ func computeLoginUrl(body, realm string) string {
 }
 
 func (v *Identity) RefreshToken(token *oauth2.Token) (*oauth2.Token, error) {
-	var res TokenRequestStruct
 	params := url.Values{
 		"grant_type":    {"refresh_token"},
 		"client_id":     {CLIENT_ID},
 		"refresh_token": {token.RefreshToken},
 	}
 
-	uri := fmt.Sprintf(TOKEN_URL, v.realm)
-	req, _ := http.NewRequest("POST", uri, strings.NewReader(params.Encode()))
+	req, _ := http.NewRequest("POST", v.oc.Endpoint.TokenURL, strings.NewReader(params.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
-	if err := v.trclient.DoJSON(req, &res); err != nil {
+	client := newClient()
+	client.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+		return http.ErrUseLastResponse
+	}
+
+	var res TokenRequestStruct
+	if err := doJSON(client, req, &res); err != nil {
 		return nil, err
 	}
 
 	res.Expiry = time.Now().Add(time.Duration(res.ExpiresIn) * time.Second)
-	log.Println("RefreshToken successful. New expiry:", res.Expiry)
 
 	return &res.Token, nil
 }

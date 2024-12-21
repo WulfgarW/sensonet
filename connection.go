@@ -6,17 +6,15 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"time"
-
 	"net/url"
+	"time"
 
 	"golang.org/x/oauth2"
 )
 
 // Connection is the Sensonet connection
 type Connection struct {
-	client               *Helper
-	identity             *Identity
+	client               httpDoer
 	homesAndSystemsCache Cacheable[HomesAndSystems]
 	cache                time.Duration
 	currentQuickmode     string
@@ -25,48 +23,19 @@ type Connection struct {
 }
 
 // NewConnection creates a new Sensonet device connection.
-func NewConnection(client *http.Client, credentials *CredentialsStruct, token *oauth2.Token) (*Connection, *oauth2.Token, error) {
-	helper := NewHelper(client)
-	identity, err := NewIdentity(helper, credentials)
-	if err != nil {
-		log.Fatal(err)
-	}
-	var ts oauth2.TokenSource
-	if token == nil {
-		log.Println("No token provided. Calling login")
-		token, err = identity.Login()
-		if err != nil {
-			log.Fatal(err)
-		}
-	}
-
-	ts, err = identity.TokenSource(token)
-	if err != nil {
-		log.Println("Error generating token source from provied token. Calling login")
-		token, err = identity.Login()
-		if err != nil {
-			log.Fatal(err)
-		}
-		ts, err = identity.TokenSource(token)
-		if err != nil {
-			log.Fatal(err)
-		}
-		log.Println("Generating new token source successful")
-	}
-
+func NewConnection(client *http.Client, ts oauth2.TokenSource) (*Connection, error) {
 	client.Transport = &oauth2.Transport{
 		Source: ts,
 		Base:   client.Transport,
 	}
+
 	conn := &Connection{
-		client:           helper,
-		identity:         identity,
+		client:           client,
 		cache:            90 * time.Second,
 		currentQuickmode: "", // assuming that no quick mode is active
 		quickmodeStarted: time.Now(),
-		quickmodeStopped: time.Now().Add(-2 * time.Minute), //time stamp is set in the past so that first call of refreshCurrentQuickMode() changes currentQuickmode if necessary
+		quickmodeStopped: time.Now().Add(-2 * time.Minute), // time stamp is set in the past so that first call of refreshCurrentQuickMode() changes currentQuickmode if necessary
 	}
-	token, _ = ts.Token()
 
 	conn.homesAndSystemsCache = ResettableCached(func() (HomesAndSystems, error) {
 		var res HomesAndSystems
@@ -74,7 +43,7 @@ func NewConnection(client *http.Client, credentials *CredentialsStruct, token *o
 		return res, err
 	}, conn.cache)
 
-	return conn, token, nil
+	return conn, nil
 }
 
 func (c *Connection) GetCurrentQuickMode() string {
@@ -99,8 +68,8 @@ func (c *Connection) getHomesAndSystems(res *HomesAndSystems) error {
 	req, _ := http.NewRequest("GET", uri, nil)
 	req.Header = c.getSensonetHttpHeader()
 
-	//var res Homes
-	if err := c.client.DoJSON(req, &res.Homes); err != nil {
+	// var res Homes
+	if err := doJSON(c.client, req, &res.Homes); err != nil {
 		return fmt.Errorf("error getting homes: %w", err)
 	}
 	var state SystemStatus
@@ -108,14 +77,14 @@ func (c *Connection) getHomesAndSystems(res *HomesAndSystems) error {
 		url := API_URL_BASE + fmt.Sprintf("/systems/%s/tli", home.SystemID)
 		req, _ := http.NewRequest("GET", url, nil)
 		req.Header = c.getSensonetHttpHeader()
-		if err := c.client.DoJSON(req, &state); err != nil {
+		if err := doJSON(c.client, req, &state); err != nil {
 			return fmt.Errorf("error getting state for home %s: %w", home.HomeName, err)
 		}
 		var systemDevices SystemDevices
 		url = API_URL_BASE + fmt.Sprintf(DEVICES_URL, home.SystemID)
 		req, _ = http.NewRequest("GET", url, nil)
 		req.Header = c.getSensonetHttpHeader()
-		if err := c.client.DoJSON(req, &systemDevices); err != nil {
+		if err := doJSON(c.client, req, &systemDevices); err != nil {
 			return fmt.Errorf("error getting device data: %w", err)
 		}
 		var systemAndId SystemAndId
@@ -124,7 +93,6 @@ func (c *Connection) getHomesAndSystems(res *HomesAndSystems) error {
 		systemAndId.SystemDevices = systemDevices
 		if len(res.Systems) <= i {
 			res.Systems = append(res.Systems, systemAndId)
-
 		} else {
 			res.Systems[i] = systemAndId
 		}
@@ -235,7 +203,7 @@ func (c *Connection) StartZoneQuickVeto(systemId string, zone int, setpoint floa
 	req.Header.Set("Content-Type", "application/json")
 	var resp []byte
 	log.Printf("Sending POST request to: %s\n", urlZoneQuickVeto)
-	resp, err = c.client.DoBody(req)
+	resp, err = doBody(c.client, req)
 	if err != nil {
 		err = fmt.Errorf("could not start quick veto. Error: %s", err)
 		log.Printf("Response: %s\n", resp)
@@ -257,7 +225,7 @@ func (c *Connection) StopZoneQuickVeto(systemId string, zone int) error {
 	req.Header = c.getSensonetHttpHeader()
 	var resp []byte
 	log.Printf("Sending DELETE request to: %s\n", urlZoneQuickVeto)
-	resp, err = c.client.DoBody(req)
+	resp, err = doBody(c.client, req)
 	if err != nil {
 		err = fmt.Errorf("could not stop quick veto. Error: %s", err)
 		log.Printf("Response: %s\n", resp)
@@ -280,7 +248,7 @@ func (c *Connection) StartHotWaterBoost(systemId string, hotwaterIndex int) erro
 	req.Header = c.getSensonetHttpHeader()
 	req.Header.Set("Content-Type", "application/json")
 	var resp []byte
-	resp, err = c.client.DoBody(req)
+	resp, err = doBody(c.client, req)
 	if err != nil {
 		err = fmt.Errorf("could not start hotwater boost. Error: %s", err)
 		log.Printf("Response: %s\n", resp)
@@ -301,7 +269,7 @@ func (c *Connection) StopHotWaterBoost(systemId string, hotwaterIndex int) error
 	}
 	req.Header = c.getSensonetHttpHeader()
 	var resp []byte
-	resp, err = c.client.DoBody(req)
+	resp, err = doBody(c.client, req)
 	if err != nil {
 		err = fmt.Errorf("could not stop hotwater boost. Error: %s", err)
 		log.Printf("Response: %s\n", resp)
@@ -351,14 +319,14 @@ func (c *Connection) StartStrategybased(systemId string, strategy int, heatingPa
 		}
 	default:
 		if c.currentQuickmode == QUICKMODE_HOTWATER {
-			//if hotwater boost active, then stop it
+			// if hotwater boost active, then stop it
 			err = c.StopHotWaterBoost(systemId, hotwaterPar.Index)
 			if err == nil {
 				log.Println("Stopping Hotwater Boost")
 			}
 		}
 		if c.currentQuickmode == QUICKMODE_HEATING {
-			//if zone quick veto active, then stop it
+			// if zone quick veto active, then stop it
 			err = c.StopZoneQuickVeto(systemId, heatingPar.ZoneIndex)
 			if err == nil {
 				log.Println("Stopping Zone Quick Veto")
@@ -416,7 +384,7 @@ func (c *Connection) StopStrategybased(systemId string, strategy int, heatingPar
 // and returns, which quick mode should be started, when evcc sends an "Enable"
 func (c *Connection) WhichQuickMode(dhwData *DhwData, zoneData *ZoneData, strategy int, heatingPar *HeatingParStruct, hotwater *HotwaterParStruct) int {
 	log.Println("Strategy = ", strategy)
-	//log.Printf("Checking if hot water boost possible. Operation Mode = %s, temperature setpoint= %02.2f, live temperature= %02.2f", res.Hotwater.OperationMode, res.Hotwater.HotwaterTemperatureSetpoint, res.Hotwater.HotwaterLiveTemperature)
+	// log.Printf("Checking if hot water boost possible. Operation Mode = %s, temperature setpoint= %02.2f, live temperature= %02.2f", res.Hotwater.OperationMode, res.Hotwater.HotwaterTemperatureSetpoint, res.Hotwater.HotwaterLiveTemperature)
 	// For strategy=STRATEGY_HOTWATER, a hotwater boost is possible when hotwater storage temperature is less than the temperature setpoint.
 	// For other strategies, a hotwater boost is possible when hotwater storage temperature is less than the temperature setpoint minus 5°C
 	addOn := -5.0
@@ -506,7 +474,7 @@ func (c *Connection) GetEnergyData(systemid, deviceUuid, operationMode, energyTy
 	url := API_URL_BASE + fmt.Sprintf(ENERGY_URL, systemid, deviceUuid) + v.Encode()
 	req, _ := http.NewRequest("GET", url, nil)
 	req.Header = c.getSensonetHttpHeader()
-	if err := c.client.DoJSON(req, &energyData); err != nil {
+	if err := doJSON(c.client, req, &energyData); err != nil {
 		return energyData, fmt.Errorf("error getting energy data for %s: %w", deviceUuid, err)
 	}
 	return energyData, nil
