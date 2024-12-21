@@ -33,7 +33,7 @@ func Oauth2ConfigForRealm(realm string) *oauth2.Config {
 }
 
 type Identity struct {
-	client   *Helper
+	client   httpDoer
 	user     string
 	password string
 	realm    string
@@ -47,7 +47,7 @@ func NewIdentity(client *http.Client, credentials *CredentialsStruct) (*Identity
 	}
 
 	v := &Identity{
-		client:   NewHelper(client),
+		client:   client,
 		user:     credentials.User,
 		password: credentials.Password,
 		realm:    credentials.Realm,
@@ -143,7 +143,7 @@ func (v *Identity) Login() (oauth2.TokenSource, error) {
 	req, _ = http.NewRequest("POST", uri, strings.NewReader(params.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
-	if err := v.client.DoJSON(req, &token); err != nil {
+	if err := doJSON(v.client, req, &token); err != nil {
 		return nil, fmt.Errorf("could not get token: %w", err)
 	}
 
@@ -169,10 +169,9 @@ func (v *Identity) RefreshToken(token *oauth2.Token) (*oauth2.Token, error) {
 	client.CheckRedirect = func(req *http.Request, via []*http.Request) error {
 		return http.ErrUseLastResponse
 	}
-	doer := NewHelper(client)
 
 	var res TokenRequestStruct
-	if err := doer.DoJSON(req, &res); err != nil {
+	if err := doJSON(client, req, &res); err != nil {
 		return nil, err
 	}
 
