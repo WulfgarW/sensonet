@@ -78,7 +78,7 @@ func (v *Identity) Login() (oauth2.TokenSource, error) {
 		"code_challenge":        {oauth2.S256ChallengeFromVerifier(cv)},
 	}
 
-	uri := fmt.Sprintf(AUTH_URL, v.realm) + "?" + data.Encode()
+	uri := v.oc.Endpoint.AuthURL + "?" + data.Encode()
 	req, _ := http.NewRequest("GET", uri, nil)
 
 	resp, err := v.client.Do(req)
@@ -102,7 +102,7 @@ func (v *Identity) Login() (oauth2.TokenSource, error) {
 		return nil, errors.New("missing code")
 	}
 
-	uri = computeLoginUrl(string(body), v.realm)
+	uri = v.computeLoginUrl(string(body))
 	if uri == "" {
 		return nil, errors.New("missing login url")
 	}
@@ -139,8 +139,7 @@ func (v *Identity) Login() (oauth2.TokenSource, error) {
 		"redirect_uri":  {"enduservaillant.page.link://login"},
 	}
 
-	uri = fmt.Sprintf(TOKEN_URL, v.realm)
-	req, _ = http.NewRequest("POST", uri, strings.NewReader(params.Encode()))
+	req, _ = http.NewRequest("POST", v.oc.Endpoint.TokenURL, strings.NewReader(params.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
 	if err := doJSON(v.client, req, &token); err != nil {
@@ -154,6 +153,19 @@ func (v *Identity) Login() (oauth2.TokenSource, error) {
 	return ts, nil
 }
 
+func (v *Identity) computeLoginUrl(body string) string {
+	url := fmt.Sprintf(LOGIN_URL, v.realm)
+	index1 := strings.Index(body, "authenticate?")
+	if index1 < 0 {
+		return ""
+	}
+	index2 := strings.Index(body[index1:], "\"")
+	if index2 < 0 {
+		return ""
+	}
+	return html.UnescapeString(url + body[index1+12:index1+index2])
+}
+
 func (v *Identity) RefreshToken(token *oauth2.Token) (*oauth2.Token, error) {
 	params := url.Values{
 		"grant_type":    {"refresh_token"},
@@ -161,8 +173,7 @@ func (v *Identity) RefreshToken(token *oauth2.Token) (*oauth2.Token, error) {
 		"refresh_token": {token.RefreshToken},
 	}
 
-	uri := fmt.Sprintf(TOKEN_URL, v.realm)
-	req, _ := http.NewRequest("POST", uri, strings.NewReader(params.Encode()))
+	req, _ := http.NewRequest("POST", v.oc.Endpoint.TokenURL, strings.NewReader(params.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
 	client := newClient()
@@ -179,17 +190,4 @@ func (v *Identity) RefreshToken(token *oauth2.Token) (*oauth2.Token, error) {
 	log.Println("RefreshToken successful. New expiry:", res.Expiry)
 
 	return &res.Token, nil
-}
-
-func computeLoginUrl(body, realm string) string {
-	url := fmt.Sprintf(LOGIN_URL, realm)
-	index1 := strings.Index(body, "authenticate?")
-	if index1 < 0 {
-		return ""
-	}
-	index2 := strings.Index(body[index1:], "\"")
-	if index2 < 0 {
-		return ""
-	}
-	return html.UnescapeString(url + body[index1+12:index1+index2])
 }
