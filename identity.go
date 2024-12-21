@@ -14,14 +14,13 @@ import (
 	"time"
 
 	"github.com/coreos/go-oidc/v3/oidc"
+	"github.com/evcc-io/evcc/util/oauth"
 
 	"dario.cat/mergo"
 	"golang.org/x/oauth2"
 )
 
 const REALM_GERMANY = "vaillant-germany-b2c"
-
-var Oauth2Config = Oauth2ConfigForRealm(REALM_GERMANY)
 
 // Timeout is the default request timeout used by the Helper
 var timeout = 10 * time.Second
@@ -42,6 +41,7 @@ type Identity struct {
 	user     string
 	password string
 	realm    string
+	oc       *oauth2.Config
 }
 
 func NewIdentity(client *http.Client, credentials *CredentialsStruct) (*Identity, error) {
@@ -49,6 +49,7 @@ func NewIdentity(client *http.Client, credentials *CredentialsStruct) (*Identity
 	client.CheckRedirect = func(req *http.Request, via []*http.Request) error {
 		return http.ErrUseLastResponse
 	}
+
 	trclient := NewHelper(newClient())
 	trclient.Jar, _ = cookiejar.New(nil)
 	trclient.CheckRedirect = func(req *http.Request, via []*http.Request) error {
@@ -61,11 +62,9 @@ func NewIdentity(client *http.Client, credentials *CredentialsStruct) (*Identity
 		user:     credentials.User,
 		password: credentials.Password,
 		realm:    credentials.Realm,
+		oc:       Oauth2ConfigForRealm(credentials.Realm),
 	}
-	if credentials.Realm == "" {
-		v.realm = REALM_GERMANY
-	}
-	Oauth2Config = Oauth2ConfigForRealm(v.realm)
+
 	return v, nil
 }
 
@@ -78,7 +77,7 @@ func newClient() *http.Client {
 	}
 }
 
-func (v *Identity) Login() (*oauth2.Token, error) {
+func (v *Identity) Login() (oauth2.TokenSource, error) {
 	cv := oauth2.GenerateVerifier()
 
 	data := url.Values{
@@ -161,20 +160,22 @@ func (v *Identity) Login() (*oauth2.Token, error) {
 
 	token.Expiry = time.Now().Add(time.Duration(token.ExpiresIn) * time.Second)
 
-	return &token.Token, nil
+	ts := oauth.RefreshTokenSource(&token.Token, v)
+
+	return ts, nil
 }
 
-type TokenRefresher interface {
+type tokenRefresher interface {
 	RefreshToken(token *oauth2.Token) (*oauth2.Token, error)
 }
 
 type TokenSource struct {
 	mu        sync.Mutex
 	token     *oauth2.Token
-	refresher TokenRefresher
+	refresher tokenRefresher
 }
 
-func RefreshTokenSource(token *oauth2.Token, refresher TokenRefresher) oauth2.TokenSource {
+func RefreshTokenSource(token *oauth2.Token, refresher tokenRefresher) oauth2.TokenSource {
 	if token == nil {
 		// allocate an (expired) token or mergeToken will fail
 		token = new(oauth2.Token)
