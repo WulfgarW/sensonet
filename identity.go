@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"github.com/coreos/go-oidc/v3/oidc"
-	"github.com/evcc-io/evcc/util/oauth"
 
 	"dario.cat/mergo"
 	"golang.org/x/oauth2"
@@ -160,7 +159,7 @@ func (v *Identity) Login() (oauth2.TokenSource, error) {
 
 	token.Expiry = time.Now().Add(time.Duration(token.ExpiresIn) * time.Second)
 
-	ts := oauth.RefreshTokenSource(&token.Token, v)
+	ts := refreshTokenSource(&token.Token, v)
 
 	return ts, nil
 }
@@ -175,7 +174,7 @@ type TokenSource struct {
 	refresher tokenRefresher
 }
 
-func RefreshTokenSource(token *oauth2.Token, refresher tokenRefresher) oauth2.TokenSource {
+func refreshTokenSource(token *oauth2.Token, refresher tokenRefresher) oauth2.TokenSource {
 	if token == nil {
 		// allocate an (expired) token or mergeToken will fail
 		token = new(oauth2.Token)
@@ -205,21 +204,10 @@ func (ts *TokenSource) Token() (*oauth2.Token, error) {
 	if token.AccessToken == "" {
 		err = errors.New("token refresh failed to obtain access token")
 	} else {
-		err = ts.mergeToken(token)
+		err = mergo.Merge(ts.token, token, mergo.WithOverride)
 	}
 
 	return ts.token, err
-}
-
-// mergeToken updates a token while preventing wiping the refresh token
-func (ts *TokenSource) mergeToken(t *oauth2.Token) error {
-	return mergo.Merge(ts.token, t, mergo.WithOverride)
-}
-
-func (v *Identity) TokenSource(token *oauth2.Token) (oauth2.TokenSource, error) {
-	ts := oauth2.ReuseTokenSource(token, RefreshTokenSource(token, v))
-	_, err := ts.Token()
-	return ts, err
 }
 
 func computeLoginUrl(body, realm string) string {
