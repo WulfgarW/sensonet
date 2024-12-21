@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"html"
 	"io"
-	"log"
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
@@ -187,7 +186,6 @@ func (v *Identity) RefreshToken(token *oauth2.Token) (*oauth2.Token, error) {
 	}
 
 	res.Expiry = time.Now().Add(time.Duration(res.ExpiresIn) * time.Second)
-	log.Println("RefreshToken successful. New expiry:", res.Expiry)
 
 	return &res.Token, nil
 }
