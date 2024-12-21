@@ -10,12 +10,10 @@ import (
 	"net/http/cookiejar"
 	"net/url"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/coreos/go-oidc/v3/oidc"
 
-	"dario.cat/mergo"
 	"golang.org/x/oauth2"
 )
 
@@ -156,65 +154,6 @@ func (v *Identity) Login() (oauth2.TokenSource, error) {
 	return ts, nil
 }
 
-type tokenRefresher interface {
-	RefreshToken(token *oauth2.Token) (*oauth2.Token, error)
-}
-
-type TokenSource struct {
-	mu        sync.Mutex
-	token     *oauth2.Token
-	refresher tokenRefresher
-}
-
-func refreshTokenSource(token *oauth2.Token, refresher tokenRefresher) oauth2.TokenSource {
-	if token == nil {
-		// allocate an (expired) token or mergeToken will fail
-		token = new(oauth2.Token)
-	}
-
-	ts := &TokenSource{
-		token:     token,
-		refresher: refresher,
-	}
-
-	return ts
-}
-
-func (ts *TokenSource) Token() (*oauth2.Token, error) {
-	ts.mu.Lock()
-	defer ts.mu.Unlock()
-
-	if ts.token.Valid() {
-		return ts.token, nil
-	}
-
-	token, err := ts.refresher.RefreshToken(ts.token)
-	if err != nil {
-		return ts.token, err
-	}
-
-	if token.AccessToken == "" {
-		err = errors.New("token refresh failed to obtain access token")
-	} else {
-		err = mergo.Merge(ts.token, token, mergo.WithOverride)
-	}
-
-	return ts.token, err
-}
-
-func computeLoginUrl(body, realm string) string {
-	url := fmt.Sprintf(LOGIN_URL, realm)
-	index1 := strings.Index(body, "authenticate?")
-	if index1 < 0 {
-		return ""
-	}
-	index2 := strings.Index(body[index1:], "\"")
-	if index2 < 0 {
-		return ""
-	}
-	return html.UnescapeString(url + body[index1+12:index1+index2])
-}
-
 func (v *Identity) RefreshToken(token *oauth2.Token) (*oauth2.Token, error) {
 	params := url.Values{
 		"grant_type":    {"refresh_token"},
@@ -241,4 +180,17 @@ func (v *Identity) RefreshToken(token *oauth2.Token) (*oauth2.Token, error) {
 	log.Println("RefreshToken successful. New expiry:", res.Expiry)
 
 	return &res.Token, nil
+}
+
+func computeLoginUrl(body, realm string) string {
+	url := fmt.Sprintf(LOGIN_URL, realm)
+	index1 := strings.Index(body, "authenticate?")
+	if index1 < 0 {
+		return ""
+	}
+	index2 := strings.Index(body[index1:], "\"")
+	if index2 < 0 {
+		return ""
+	}
+	return html.UnescapeString(url + body[index1+12:index1+index2])
 }
