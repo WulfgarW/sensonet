@@ -22,13 +22,17 @@ var (
 
 // Helper provides utility primitives
 type Helper struct {
-	*http.Client
+	httpDoer
+}
+
+type httpDoer interface {
+	Do(req *http.Request) (*http.Response, error)
 }
 
 // NewHelper creates http helper for simplified PUT GET logic
-func NewHelper(client *http.Client) *Helper {
+func NewHelper(client httpDoer) *Helper {
 	return &Helper{
-		Client: client,
+		httpDoer: client,
 	}
 }
 

@@ -36,7 +36,6 @@ func Oauth2ConfigForRealm(realm string) *oauth2.Config {
 
 type Identity struct {
 	client   *Helper
-	trclient *Helper // seperate client for token refresh
 	user     string
 	password string
 	realm    string
@@ -49,15 +48,8 @@ func NewIdentity(client *http.Client, credentials *CredentialsStruct) (*Identity
 		return http.ErrUseLastResponse
 	}
 
-	trclient := NewHelper(newClient())
-	trclient.Jar, _ = cookiejar.New(nil)
-	trclient.CheckRedirect = func(req *http.Request, via []*http.Request) error {
-		return http.ErrUseLastResponse
-	}
-
 	v := &Identity{
 		client:   NewHelper(client),
-		trclient: trclient,
 		user:     credentials.User,
 		password: credentials.Password,
 		realm:    credentials.Realm,
@@ -224,7 +216,6 @@ func computeLoginUrl(body, realm string) string {
 }
 
 func (v *Identity) RefreshToken(token *oauth2.Token) (*oauth2.Token, error) {
-	var res TokenRequestStruct
 	params := url.Values{
 		"grant_type":    {"refresh_token"},
 		"client_id":     {CLIENT_ID},
@@ -235,7 +226,14 @@ func (v *Identity) RefreshToken(token *oauth2.Token) (*oauth2.Token, error) {
 	req, _ := http.NewRequest("POST", uri, strings.NewReader(params.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
-	if err := v.trclient.DoJSON(req, &res); err != nil {
+	client := newClient()
+	client.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+		return http.ErrUseLastResponse
+	}
+	doer := NewHelper(client)
+
+	var res TokenRequestStruct
+	if err := doer.DoJSON(req, &res); err != nil {
 		return nil, err
 	}
 
