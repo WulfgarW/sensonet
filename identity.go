@@ -10,11 +10,10 @@ import (
 	"net/http/cookiejar"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/coreos/go-oidc/v3/oidc"
-
-	"sync"
 
 	"dario.cat/mergo"
 	"golang.org/x/oauth2"
@@ -39,13 +38,13 @@ func Oauth2ConfigForRealm(realm string) *oauth2.Config {
 
 type Identity struct {
 	client   *Helper
-	trclient *Helper //seperate client for token refresh
+	trclient *Helper // seperate client for token refresh
 	user     string
 	password string
 	realm    string
 }
 
-func NewIdentity(client *Helper, credentials *CredentialsStruct) (*Identity, error) {
+func NewIdentity(client *http.Client, credentials *CredentialsStruct) (*Identity, error) {
 	client.Jar, _ = cookiejar.New(nil)
 	client.CheckRedirect = func(req *http.Request, via []*http.Request) error {
 		return http.ErrUseLastResponse
@@ -57,7 +56,7 @@ func NewIdentity(client *Helper, credentials *CredentialsStruct) (*Identity, err
 	}
 
 	v := &Identity{
-		client:   client,
+		client:   NewHelper(client),
 		trclient: trclient,
 		user:     credentials.User,
 		password: credentials.Password,
@@ -75,7 +74,7 @@ func NewIdentity(client *Helper, credentials *CredentialsStruct) (*Identity, err
 func newClient() *http.Client {
 	return &http.Client{
 		Timeout: timeout,
-		//Transport: httplogger.NewLoggedTransport(http.DefaultTransport, newLogger(log)),
+		// Transport: httplogger.NewLoggedTransport(http.DefaultTransport, newLogger(log)),
 	}
 }
 
