@@ -23,11 +23,11 @@ type Connection struct {
 	quickmodeStopped     time.Time
 }
 
-type headerTransport struct {
+type sensonetHeaders struct {
 	http.RoundTripper
 }
 
-func (t *headerTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+func (t *sensonetHeaders) RoundTrip(req *http.Request) (*http.Response, error) {
 	for k, v := range (http.Header{
 		"Accept-Language":           {"en-GB"},
 		"Accept":                    {"application/json, text/plain, */*"},
@@ -48,7 +48,7 @@ func (t *headerTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 func NewConnection(client *http.Client, ts oauth2.TokenSource) (*Connection, error) {
 	client.Transport = &oauth2.Transport{
 		Source: ts,
-		Base: &headerTransport{
+		Base: &sensonetHeaders{
 			client.Transport,
 		},
 	}
