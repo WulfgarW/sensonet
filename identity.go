@@ -35,31 +35,25 @@ func Oauth2ConfigForRealm(realm string) *oauth2.Config {
 }
 
 type Identity struct {
-	client   httpDoer
-	user     string
-	password string
-	realm    string
-	oc       *oauth2.Config
+	client httpDoer
+	oc     *oauth2.Config
 }
 
-func NewIdentity(client *http.Client, credentials *CredentialsStruct) (*Identity, error) {
+func NewIdentity(client *http.Client, realm string) (*Identity, error) {
 	client.Jar, _ = cookiejar.New(nil)
 	client.CheckRedirect = func(req *http.Request, via []*http.Request) error {
 		return http.ErrUseLastResponse
 	}
 
 	v := &Identity{
-		client:   client,
-		user:     credentials.User,
-		password: credentials.Password,
-		realm:    credentials.Realm,
-		oc:       Oauth2ConfigForRealm(credentials.Realm),
+		client: client,
+		oc:     Oauth2ConfigForRealm(realm),
 	}
 
 	return v, nil
 }
 
-func (v *Identity) Login() (oauth2.TokenSource, error) {
+func (v *Identity) Login(user, password string) (oauth2.TokenSource, error) {
 	cv := oauth2.GenerateVerifier()
 
 	uri := v.oc.AuthCodeURL(cv, oauth2.S256ChallengeOption(cv), oauth2.SetAuthURLParam("code", "code_challenge"))
@@ -83,8 +77,8 @@ func (v *Identity) Login() (oauth2.TokenSource, error) {
 	uri = match[1]
 
 	params := url.Values{
-		"username":     {v.user},
-		"password":     {v.password},
+		"username":     {user},
+		"password":     {password},
 		"credentialId": {""},
 	}
 
