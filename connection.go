@@ -14,7 +14,7 @@ import (
 
 // Connection is the Sensonet connection
 type Connection struct {
-	client               httpDoer
+	client               *http.Client
 	homesAndSystemsCache Cacheable[HomesAndSystems]
 	cache                time.Duration
 	currentQuickmode     string

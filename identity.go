@@ -1,13 +1,14 @@
 package sensonet
 
 import (
+	"context"
 	"errors"
 	"fmt"
-	"html"
 	"io"
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
+	"regexp"
 	"strings"
 	"time"
 
@@ -23,169 +24,83 @@ var timeout = 10 * time.Second
 
 func Oauth2ConfigForRealm(realm string) *oauth2.Config {
 	return &oauth2.Config{
+		ClientID: CLIENT_ID,
 		Endpoint: oauth2.Endpoint{
 			AuthURL:  fmt.Sprintf(AUTH_URL, realm),
 			TokenURL: fmt.Sprintf(TOKEN_URL, realm),
 		},
-		Scopes: []string{oidc.ScopeOpenID, oidc.ScopeOfflineAccess},
+		RedirectURL: REDIRECT_URL,
+		Scopes:      []string{oidc.ScopeOpenID, oidc.ScopeOfflineAccess},
 	}
 }
 
 type Identity struct {
-	client   httpDoer
-	user     string
-	password string
-	realm    string
-	oc       *oauth2.Config
+	client *http.Client
+	oc     *oauth2.Config
 }
 
-func NewIdentity(client *http.Client, credentials *CredentialsStruct) (*Identity, error) {
+func NewIdentity(client *http.Client, realm string) (*Identity, error) {
 	client.Jar, _ = cookiejar.New(nil)
 	client.CheckRedirect = func(req *http.Request, via []*http.Request) error {
 		return http.ErrUseLastResponse
 	}
 
 	v := &Identity{
-		client:   client,
-		user:     credentials.User,
-		password: credentials.Password,
-		realm:    credentials.Realm,
-		oc:       Oauth2ConfigForRealm(credentials.Realm),
+		client: client,
+		oc:     Oauth2ConfigForRealm(realm),
 	}
 
 	return v, nil
 }
 
-// newClient creates http client with default transport
-// func newClient(log *log.Logger) *http.Client {
-func newClient() *http.Client {
-	return &http.Client{
-		Timeout: timeout,
-		// Transport: httplogger.NewLoggedTransport(http.DefaultTransport, newLogger(log)),
-	}
-}
-
-func (v *Identity) Login() (oauth2.TokenSource, error) {
+func (v *Identity) Login(user, password string) (oauth2.TokenSource, error) {
 	cv := oauth2.GenerateVerifier()
+	ctx := context.WithValue(context.TODO(), oauth2.HTTPClient, v.client)
 
-	data := url.Values{
-		"response_type":         {"code"},
-		"client_id":             {CLIENT_ID},
-		"code":                  {"code_challenge"},
-		"redirect_uri":          {"enduservaillant.page.link://login"},
-		"code_challenge_method": {"S256"},
-		"code_challenge":        {oauth2.S256ChallengeFromVerifier(cv)},
-	}
-
-	uri := v.oc.Endpoint.AuthURL + "?" + data.Encode()
-	req, _ := http.NewRequest("GET", uri, nil)
-
-	resp, err := v.client.Do(req)
+	uri := v.oc.AuthCodeURL(cv, oauth2.S256ChallengeOption(cv), oauth2.SetAuthURLParam("code", "code_challenge"))
+	resp, err := v.client.Get(uri)
 	if err != nil {
-		return nil, fmt.Errorf("could not get code: %w", err)
+		return nil, err
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("could not read response body: %w", err)
+		return nil, err
 	}
 
-	var code string
-	if val, ok := resp.Header["Location"]; ok {
-		parsedUrl, _ := url.Parse(val[0])
-		code = parsedUrl.Query()["code"][0]
+	match := regexp.MustCompile(`action\s*=\s*"(.+?)"`).FindStringSubmatch(string(body))
+	if len(match) < 2 {
+		return nil, errors.New("missing login form action")
 	}
-
-	if code != "" {
-		return nil, errors.New("missing code")
-	}
-
-	uri = v.computeLoginUrl(string(body))
-	if uri == "" {
-		return nil, errors.New("missing login url")
-	}
+	uri = match[1]
 
 	params := url.Values{
-		"username":     {v.user},
-		"password":     {v.password},
+		"username":     {user},
+		"password":     {password},
 		"credentialId": {""},
 	}
 
-	req, _ = http.NewRequest("POST", uri, strings.NewReader(params.Encode()))
+	req, _ := http.NewRequest("POST", uri, strings.NewReader(params.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
 	resp, err = v.client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("could not get code: %w", err)
-	}
-
-	location := resp.Header.Get("Location")
-	if location == "" {
-		return nil, errors.New("could not find location header")
-	}
-
-	parsedUrl, _ := url.Parse(location)
-	code = parsedUrl.Query()["code"][0]
-
-	// get token
-	var token TokenRequestStruct
-	params = url.Values{
-		"grant_type":    {"authorization_code"},
-		"client_id":     {CLIENT_ID},
-		"code":          {code},
-		"code_verifier": {cv},
-		"redirect_uri":  {"enduservaillant.page.link://login"},
-	}
-
-	req, _ = http.NewRequest("POST", v.oc.Endpoint.TokenURL, strings.NewReader(params.Encode()))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-
-	if err := doJSON(v.client, req, &token); err != nil {
-		return nil, fmt.Errorf("could not get token: %w", err)
-	}
-
-	token.Expiry = time.Now().Add(time.Duration(token.ExpiresIn) * time.Second)
-
-	ts := refreshTokenSource(&token.Token, v)
-
-	return ts, nil
-}
-
-func (v *Identity) computeLoginUrl(body string) string {
-	url := fmt.Sprintf(LOGIN_URL, v.realm)
-	index1 := strings.Index(body, "authenticate?")
-	if index1 < 0 {
-		return ""
-	}
-	index2 := strings.Index(body[index1:], "\"")
-	if index2 < 0 {
-		return ""
-	}
-	return html.UnescapeString(url + body[index1+12:index1+index2])
-}
-
-func (v *Identity) RefreshToken(token *oauth2.Token) (*oauth2.Token, error) {
-	params := url.Values{
-		"grant_type":    {"refresh_token"},
-		"client_id":     {CLIENT_ID},
-		"refresh_token": {token.RefreshToken},
-	}
-
-	req, _ := http.NewRequest("POST", v.oc.Endpoint.TokenURL, strings.NewReader(params.Encode()))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-
-	client := newClient()
-	client.CheckRedirect = func(req *http.Request, via []*http.Request) error {
-		return http.ErrUseLastResponse
-	}
-
-	var res TokenRequestStruct
-	if err := doJSON(client, req, &res); err != nil {
 		return nil, err
 	}
 
-	res.Expiry = time.Now().Add(time.Duration(res.ExpiresIn) * time.Second)
+	location, _ := url.Parse(resp.Header.Get("Location"))
+	code := location.Query().Get("code")
+	if code == "" {
+		return nil, errors.New("could not get code")
+	}
 
-	return &res.Token, nil
+	token, err := v.oc.Exchange(ctx, code, oauth2.VerifierOption(cv))
+	if err != nil {
+		return nil, fmt.Errorf("could not get token: %w", err)
+	}
+
+	ts := v.oc.TokenSource(ctx, token)
+
+	return ts, nil
 }
