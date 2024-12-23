@@ -24,15 +24,11 @@ var (
 
 // Helper provides utility primitives
 type Helper struct {
-	httpDoer
-}
-
-type httpDoer interface {
-	Do(req *http.Request) (*http.Response, error)
+	*http.Client
 }
 
 // doBody executes HTTP request and returns the response body
-func doBody(r httpDoer, req *http.Request) ([]byte, error) {
+func doBody(r *http.Client, req *http.Request) ([]byte, error) {
 	resp, err := r.Do(req)
 	var body []byte
 	if err == nil {
@@ -52,7 +48,7 @@ func decodeJSON(resp *http.Response, res interface{}) error {
 
 // doJSON executes HTTP request and decodes JSON response.
 // It returns a StatusError on response codes other than HTTP 2xx.
-func doJSON(r httpDoer, req *http.Request, res interface{}) error {
+func doJSON(r *http.Client, req *http.Request, res interface{}) error {
 	resp, err := r.Do(req)
 	if err == nil {
 		defer resp.Body.Close()

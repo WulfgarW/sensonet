@@ -35,7 +35,7 @@ func Oauth2ConfigForRealm(realm string) *oauth2.Config {
 }
 
 type Identity struct {
-	client httpDoer
+	client *http.Client
 	oc     *oauth2.Config
 }
 
@@ -58,9 +58,7 @@ func (v *Identity) Login(user, password string) (oauth2.TokenSource, error) {
 	ctx := context.WithValue(context.TODO(), oauth2.HTTPClient, v.client)
 
 	uri := v.oc.AuthCodeURL(cv, oauth2.S256ChallengeOption(cv), oauth2.SetAuthURLParam("code", "code_challenge"))
-	req, _ := http.NewRequest("GET", uri, nil)
-
-	resp, err := v.client.Do(req)
+	resp, err := v.client.Get(uri)
 	if err != nil {
 		return nil, err
 	}
@@ -83,7 +81,7 @@ func (v *Identity) Login(user, password string) (oauth2.TokenSource, error) {
 		"credentialId": {""},
 	}
 
-	req, _ = http.NewRequest("POST", uri, strings.NewReader(params.Encode()))
+	req, _ := http.NewRequest("POST", uri, strings.NewReader(params.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
 	resp, err = v.client.Do(req)
