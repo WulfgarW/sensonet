@@ -7,7 +7,8 @@ import (
 )
 
 const (
-	CLIENT_ID = "myvaillant"
+	CLIENT_ID    = "myvaillant"
+	REDIRECT_URL = "enduservaillant.page.link://login"
 
 	AUTH_BASE_URL = "https://identity.vaillant-group.com/auth/realms"
 	LOGIN_URL     = AUTH_BASE_URL + "/%s/login-actions/authenticate"
