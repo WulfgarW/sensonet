@@ -55,6 +55,7 @@ func NewIdentity(client *http.Client, realm string) (*Identity, error) {
 
 func (v *Identity) Login(user, password string) (oauth2.TokenSource, error) {
 	cv := oauth2.GenerateVerifier()
+	ctx := context.WithValue(context.TODO(), oauth2.HTTPClient, v.client)
 
 	uri := v.oc.AuthCodeURL(cv, oauth2.S256ChallengeOption(cv), oauth2.SetAuthURLParam("code", "code_challenge"))
 	req, _ := http.NewRequest("GET", uri, nil)
@@ -96,12 +97,12 @@ func (v *Identity) Login(user, password string) (oauth2.TokenSource, error) {
 		return nil, errors.New("could not get code")
 	}
 
-	token, err := v.oc.Exchange(context.TODO(), code, oauth2.VerifierOption(cv))
+	token, err := v.oc.Exchange(ctx, code, oauth2.VerifierOption(cv))
 	if err != nil {
 		return nil, fmt.Errorf("could not get token: %w", err)
 	}
 
-	ts := v.oc.TokenSource(context.TODO(), token)
+	ts := v.oc.TokenSource(ctx, token)
 
 	return ts, nil
 }
