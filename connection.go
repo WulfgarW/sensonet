@@ -206,8 +206,7 @@ func (c *Connection) StartZoneQuickVeto(systemId string, zone int, setpoint floa
 	req, _ := http.NewRequest("POST", url, bytes.NewReader(b))
 	req.Header.Set("Content-Type", "application/json")
 
-	_, err := doBody(c.client, req)
-	if err != nil {
+	if _, err := doBody(c.client, req); err != nil {
 		return fmt.Errorf("could not start quick veto: %w", err)
 	}
 
@@ -222,8 +221,7 @@ func (c *Connection) StopZoneQuickVeto(systemId string, zone int) error {
 	url := API_URL_BASE + fmt.Sprintf(ZONEQUICKVETO_URL, systemId, zone)
 	req, _ := http.NewRequest("DELETE", url, nil)
 
-	_, err := doBody(c.client, req)
-	if err != nil {
+	if _, err := doBody(c.client, req); err != nil {
 		return fmt.Errorf("could not stop quick veto: %w", err)
 	}
 
@@ -447,11 +445,11 @@ func (c *Connection) GetDeviceData(systemid string, whichDevices int) ([]DeviceA
 func (c *Connection) GetEnergyData(systemid, deviceUuid, operationMode, energyType, resolution string, startDate, endDate time.Time) (EnergyData, error) {
 	var energyData EnergyData
 	v := url.Values{
-		"resolution":    []string{resolution},
-		"operationMode": []string{operationMode},
-		"energyType":    []string{energyType},
-		"startDate":     []string{startDate.Format("2006-01-02T15:04:05-07:00")},
-		"endDate":       []string{endDate.Format("2006-01-02T15:04:05-07:00")},
+		"resolution":    {resolution},
+		"operationMode": {operationMode},
+		"energyType":    {energyType},
+		"startDate":     {startDate.Format("2006-01-02T15:04:05-07:00")},
+		"endDate":       {endDate.Format("2006-01-02T15:04:05-07:00")},
 	}
 
 	url := API_URL_BASE + fmt.Sprintf(ENERGY_URL, systemid, deviceUuid) + v.Encode()
