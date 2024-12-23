@@ -210,6 +210,7 @@ func (c *Connection) StartZoneQuickVeto(systemId string, zone int, setpoint floa
 	if err != nil {
 		return fmt.Errorf("could not start quick veto: %w", err)
 	}
+
 	return nil
 }
 
@@ -219,7 +220,7 @@ func (c *Connection) StopZoneQuickVeto(systemId string, zone int) error {
 	} // if parameter "zone" is negative, then the default value is used
 
 	url := API_URL_BASE + fmt.Sprintf(ZONEQUICKVETO_URL, systemId, zone)
-	req, _ := http.NewRequest("DELETE", url, bytes.NewBuffer(nil))
+	req, _ := http.NewRequest("DELETE", url, nil)
 
 	_, err := doBody(c.client, req)
 	if err != nil {
@@ -251,7 +252,7 @@ func (c *Connection) StopHotWaterBoost(systemId string, hotwaterIndex int) error
 	} // if parameter "hotwaterIndex" is negative, then the default value is used
 
 	url := API_URL_BASE + fmt.Sprintf(HOTWATERBOOST_URL, systemId, hotwaterIndex)
-	req, _ := http.NewRequest("DELETE", url, bytes.NewBuffer(nil))
+	req, _ := http.NewRequest("DELETE", url, nil)
 
 	if _, err := doBody(c.client, req); err != nil {
 		return fmt.Errorf("could not stop hotwater boost: %w", err)
