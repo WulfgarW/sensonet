@@ -59,15 +59,6 @@ func NewIdentity(client *http.Client, credentials *CredentialsStruct) (*Identity
 	return v, nil
 }
 
-// newClient creates http client with default transport
-// func newClient(log *log.Logger) *http.Client {
-func newClient() *http.Client {
-	return &http.Client{
-		Timeout: timeout,
-		// Transport: httplogger.NewLoggedTransport(http.DefaultTransport, newLogger(log)),
-	}
-}
-
 func (v *Identity) Login() (oauth2.TokenSource, error) {
 	cv := oauth2.GenerateVerifier()
 
