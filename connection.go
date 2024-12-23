@@ -77,8 +77,8 @@ func (c *Connection) GetCurrentQuickMode() string {
 
 // Reads all homes and the system report for all these homes
 func (c *Connection) getHomesAndSystems(res *HomesAndSystems) error {
-	uri := API_URL_BASE + "/homes"
-	req, _ := http.NewRequest("GET", uri, nil)
+	url := API_URL_BASE + "/homes"
+	req, _ := http.NewRequest("GET", url, nil)
 
 	// var res Homes
 	if err := doJSON(c.client, req, &res.Homes); err != nil {
@@ -198,13 +198,13 @@ func (c *Connection) StartZoneQuickVeto(systemId string, zone int, setpoint floa
 	if duration < 0.0 {
 		duration = ZONEVETODURATION_DEFAULT
 	} // if parameter "duration" is negative, then the default value is used
-	uri := API_URL_BASE + fmt.Sprintf(ZONEQUICKVETO_URL, systemId, zone)
+	url := API_URL_BASE + fmt.Sprintf(ZONEQUICKVETO_URL, systemId, zone)
 	data := map[string]float32{
 		"desiredRoomTemperatureSetpoint": setpoint,
 		"duration":                       duration,
 	}
 	b, _ := json.Marshal(data)
-	req, _ := http.NewRequest("POST", uri, bytes.NewReader(b))
+	req, _ := http.NewRequest("POST", url, bytes.NewReader(b))
 	req.Header.Set("Content-Type", "application/json")
 
 	_, err := doBody(c.client, req)
@@ -219,8 +219,8 @@ func (c *Connection) StopZoneQuickVeto(systemId string, zone int) error {
 		zone = ZONEINDEX_DEFAULT
 	} // if parameter "zone" is negative, then the default value is used
 
-	uri := API_URL_BASE + fmt.Sprintf(ZONEQUICKVETO_URL, systemId, zone)
-	req, _ := http.NewRequest("DELETE", uri, bytes.NewBuffer(nil))
+	url := API_URL_BASE + fmt.Sprintf(ZONEQUICKVETO_URL, systemId, zone)
+	req, _ := http.NewRequest("DELETE", url, bytes.NewBuffer(nil))
 
 	_, err := doBody(c.client, req)
 	if err != nil {
@@ -235,8 +235,8 @@ func (c *Connection) StartHotWaterBoost(systemId string, hotwaterIndex int) erro
 		hotwaterIndex = HOTWATERINDEX_DEFAULT
 	} // if parameter "hotwaterIndex" is negative, then the default value is used
 
-	uri := API_URL_BASE + fmt.Sprintf(HOTWATERBOOST_URL, systemId, hotwaterIndex)
-	req, _ := http.NewRequest("POST", uri, strings.NewReader("{}"))
+	url := API_URL_BASE + fmt.Sprintf(HOTWATERBOOST_URL, systemId, hotwaterIndex)
+	req, _ := http.NewRequest("POST", url, strings.NewReader("{}"))
 	req.Header.Set("Content-Type", "application/json")
 
 	if _, err := doBody(c.client, req); err != nil {
@@ -251,8 +251,8 @@ func (c *Connection) StopHotWaterBoost(systemId string, hotwaterIndex int) error
 		hotwaterIndex = HOTWATERINDEX_DEFAULT
 	} // if parameter "hotwaterIndex" is negative, then the default value is used
 
-	uri := API_URL_BASE + fmt.Sprintf(HOTWATERBOOST_URL, systemId, hotwaterIndex)
-	req, _ := http.NewRequest("DELETE", uri, bytes.NewBuffer(nil))
+	url := API_URL_BASE + fmt.Sprintf(HOTWATERBOOST_URL, systemId, hotwaterIndex)
+	req, _ := http.NewRequest("DELETE", url, bytes.NewBuffer(nil))
 
 	if _, err := doBody(c.client, req); err != nil {
 		return fmt.Errorf("could not stop hotwater boost: %w", err)
