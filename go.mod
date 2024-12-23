@@ -3,7 +3,6 @@ module github.com/WulfgarW/sensonet
 go 1.23.3
 
 require (
-	dario.cat/mergo v1.0.1
 	github.com/asaskevich/EventBus v0.0.0-20200907212545-49d423059eef
 	github.com/benbjohnson/clock v1.3.5
 	github.com/coreos/go-oidc/v3 v3.11.0

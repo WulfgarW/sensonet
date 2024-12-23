@@ -131,28 +131,42 @@ func main() {
 	// Read creadentials from file which are needed for the login
 	credentials, err := readCredentials(CREDENTIALS_FILE)
 	if err != nil {
-		logger.Fatal(err)
+		logger.Println("readCredentials() ended unsuccessful. Probably no credential file was found. Error:", err)
+	} else {
+		fmt.Println("Read credentials from file")
 	}
 
 	fmt.Println("Second step: Reading token file")
 	// Read token from file if a token is already present and stored in a file
 	token, err := readToken(TOKEN_FILE)
 	if err != nil {
-		logger.Println("readToken() ended unsuccessful. Probably no token file found.")
+		logger.Println("readToken() ended unsuccessful. Probably no token file was found. Error:", err)
+	} else {
+		fmt.Println("Token read from file:", token)
 	}
 
 	fmt.Println("Third step: Generating new connection to be used for further calls of sensonet library")
-	// Opens the connection to the myVaillant portal and returns a connection object for further function calls
-	// If a token is provided, then it's validity is checked and a token refresh called if necessary.
-	// If no token is provided or if a normal refresh is not possible, a login using the credentials is done
-	clientlogger.SetOutput(io.Discard) //comment this out, if you want logging in http client
+
+	clientlogger.SetOutput(io.Discard) // comment this out, if you want logging in http client
 	client := NewClient(clientlogger)
-	conn, newToken, err := sensonet.NewConnection(client, credentials, token)
+	// NewIdentity() initialises the oauth2 authorisation and returns.
+	// Call id.Login() with user and password returns a valid tokenSource
+	id, err := sensonet.NewIdentity(client, credentials.Realm)
+	if err != nil {
+		logger.Fatal(err)
+	}
+	ts, err := id.Login(credentials.User, credentials.Password)
+	if err != nil {
+		logger.Fatal(err)
+	}
+	// Opens the connection to the myVaillant portal and returns a connection object for further function calls
+	conn, err := sensonet.NewConnection(client, ts)
 	if err != nil {
 		logger.Fatal(err)
 	}
 
 	// Store the current token in a file for future calls of this program
+	newToken, err := ts.Token()
 	if err := writeToken(TOKEN_FILE, newToken); err != nil {
 		logger.Fatal(err)
 	}
@@ -244,7 +258,7 @@ func main() {
 				}
 			case i == rune('9'):
 				fmt.Println("Stopping strategy based session")
-				result, err := conn.StopStrategybased(systemID, sensonet.STRATEGY_HOTWATER_THEN_HEATING, &heatingPar, &hotwaterPar)
+				result, err := conn.StopStrategybased(systemID, &heatingPar, &hotwaterPar)
 				if err != nil {
 					logger.Println(err)
 				} else {

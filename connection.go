@@ -41,7 +41,7 @@ func (t *sensonetHeaders) RoundTrip(req *http.Request) (*http.Response, error) {
 		}
 	}
 
-	return t.RoundTrip(req)
+	return http.DefaultTransport.RoundTrip(req)
 }
 
 // NewConnection creates a new Sensonet device connection.
@@ -321,7 +321,7 @@ func (c *Connection) StartStrategybased(systemId string, strategy int, heatingPa
 	return c.currentQuickmode, err
 }
 
-func (c *Connection) StopStrategybased(systemId string, strategy int, heatingPar *HeatingParStruct, hotwaterPar *HotwaterParStruct) (string, error) {
+func (c *Connection) StopStrategybased(systemId string, heatingPar *HeatingParStruct, hotwaterPar *HotwaterParStruct) (string, error) {
 	c.homesAndSystemsCache.Reset()
 	state, err := c.GetSystem(systemId)
 	if err != nil {

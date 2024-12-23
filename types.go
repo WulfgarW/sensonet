@@ -2,8 +2,6 @@ package sensonet
 
 import (
 	"time"
-
-	"golang.org/x/oauth2"
 )
 
 const (
@@ -61,14 +59,6 @@ type CredentialsStruct struct {
 	User     string `json:"user"`
 	Password string `json:"password"`
 	Realm    string `json:"realm"`
-}
-
-type TokenRequestStruct struct {
-	oauth2.Token
-	RefreshExpiresIn int64  `json:"refresh_expires_in"`
-	NotBeforePolicy  int    `json:"not-before-policy"`
-	SessionState     string `json:"session_state"`
-	Scope            string `json:"scope"`
 }
 
 type HeatingParStruct struct {

@@ -23,6 +23,9 @@ const REALM_GERMANY = "vaillant-germany-b2c"
 var timeout = 10 * time.Second
 
 func Oauth2ConfigForRealm(realm string) *oauth2.Config {
+	if realm == "" {
+		realm = REALM_GERMANY
+	}
 	return &oauth2.Config{
 		ClientID: CLIENT_ID,
 		Endpoint: oauth2.Endpoint{
