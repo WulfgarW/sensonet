@@ -1,5 +1,7 @@
 package sensonet
 
+// Copied from https://github.com/evcc-io/evcc
+
 import (
 	"errors"
 	"math"
@@ -10,9 +12,7 @@ import (
 	"github.com/benbjohnson/clock"
 )
 
-var (
-	bus = EventBus.New()
-)
+var bus = EventBus.New()
 
 // ErrMustRetry indicates that a rate-limited operation should be retried
 var ErrMustRetry = errors.New("must retry")

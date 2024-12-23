@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 
 	"golang.org/x/oauth2"
@@ -22,11 +23,34 @@ type Connection struct {
 	quickmodeStopped     time.Time
 }
 
+type sensonetHeaders struct {
+	http.RoundTripper
+}
+
+func (t *sensonetHeaders) RoundTrip(req *http.Request) (*http.Response, error) {
+	for k, v := range (http.Header{
+		"Accept-Language":           {"en-GB"},
+		"Accept":                    {"application/json, text/plain, */*"},
+		"x-app-identifier":          {"VAILLANT"},
+		"x-client-locale":           {"en-GB"},
+		"x-idm-identifier":          {"KEYCLOAK"},
+		"ocp-apim-subscription-key": {"1e0a2f3511fb4c5bbb1c7f9fedd20b1c"},
+	}) {
+		for _, vv := range v {
+			req.Header.Add(k, vv)
+		}
+	}
+
+	return t.RoundTrip(req)
+}
+
 // NewConnection creates a new Sensonet device connection.
 func NewConnection(client *http.Client, ts oauth2.TokenSource) (*Connection, error) {
 	client.Transport = &oauth2.Transport{
 		Source: ts,
-		Base:   client.Transport,
+		Base: &sensonetHeaders{
+			client.Transport,
+		},
 	}
 
 	conn := &Connection{
@@ -50,23 +74,10 @@ func (c *Connection) GetCurrentQuickMode() string {
 	return c.currentQuickmode
 }
 
-// Returns the http header for http requests to sensonet
-func (c *Connection) getSensonetHttpHeader() http.Header {
-	return http.Header{
-		"Accept-Language":           {"en-GB"},
-		"Accept":                    {"application/json, text/plain, */*"},
-		"x-app-identifier":          {"VAILLANT"},
-		"x-client-locale":           {"en-GB"},
-		"x-idm-identifier":          {"KEYCLOAK"},
-		"ocp-apim-subscription-key": {"1e0a2f3511fb4c5bbb1c7f9fedd20b1c"},
-	}
-}
-
 // Reads all homes and the system report for all these homes
 func (c *Connection) getHomesAndSystems(res *HomesAndSystems) error {
-	uri := API_URL_BASE + "/homes"
-	req, _ := http.NewRequest("GET", uri, nil)
-	req.Header = c.getSensonetHttpHeader()
+	url := API_URL_BASE + "/homes"
+	req, _ := http.NewRequest("GET", url, nil)
 
 	// var res Homes
 	if err := doJSON(c.client, req, &res.Homes); err != nil {
@@ -76,14 +87,12 @@ func (c *Connection) getHomesAndSystems(res *HomesAndSystems) error {
 	for i, home := range res.Homes {
 		url := API_URL_BASE + fmt.Sprintf("/systems/%s/tli", home.SystemID)
 		req, _ := http.NewRequest("GET", url, nil)
-		req.Header = c.getSensonetHttpHeader()
 		if err := doJSON(c.client, req, &state); err != nil {
 			return fmt.Errorf("error getting state for home %s: %w", home.HomeName, err)
 		}
 		var systemDevices SystemDevices
 		url = API_URL_BASE + fmt.Sprintf(DEVICES_URL, home.SystemID)
 		req, _ = http.NewRequest("GET", url, nil)
-		req.Header = c.getSensonetHttpHeader()
 		if err := doJSON(c.client, req, &systemDevices); err != nil {
 			return fmt.Errorf("error getting device data: %w", err)
 		}
@@ -188,102 +197,73 @@ func (c *Connection) StartZoneQuickVeto(systemId string, zone int, setpoint floa
 	if duration < 0.0 {
 		duration = ZONEVETODURATION_DEFAULT
 	} // if parameter "duration" is negative, then the default value is used
-	urlZoneQuickVeto := API_URL_BASE + fmt.Sprintf(ZONEQUICKVETO_URL, systemId, zone)
+	url := API_URL_BASE + fmt.Sprintf(ZONEQUICKVETO_URL, systemId, zone)
 	data := map[string]float32{
 		"desiredRoomTemperatureSetpoint": setpoint,
 		"duration":                       duration,
 	}
-	mData, _ := json.Marshal(data)
-	req, err := http.NewRequest("POST", urlZoneQuickVeto, bytes.NewReader(mData))
-	if err != nil {
-		err = fmt.Errorf("client: could not create request: %s", err)
-		return err
-	}
-	req.Header = c.getSensonetHttpHeader()
+	b, _ := json.Marshal(data)
+	req, _ := http.NewRequest("POST", url, bytes.NewReader(b))
 	req.Header.Set("Content-Type", "application/json")
-	var resp []byte
-	log.Printf("Sending POST request to: %s\n", urlZoneQuickVeto)
-	resp, err = doBody(c.client, req)
-	if err != nil {
-		err = fmt.Errorf("could not start quick veto. Error: %s", err)
-		log.Printf("Response: %s\n", resp)
-		return err
+
+	if _, err := doBody(c.client, req); err != nil {
+		return fmt.Errorf("could not start quick veto: %w", err)
 	}
-	return err
+
+	return nil
 }
 
 func (c *Connection) StopZoneQuickVeto(systemId string, zone int) error {
 	if zone < 0 {
 		zone = ZONEINDEX_DEFAULT
 	} // if parameter "zone" is negative, then the default value is used
-	urlZoneQuickVeto := API_URL_BASE + fmt.Sprintf(ZONEQUICKVETO_URL, systemId, zone)
-	req, err := http.NewRequest("DELETE", urlZoneQuickVeto, bytes.NewBuffer(nil))
-	if err != nil {
-		err = fmt.Errorf("client: could not create request: %s", err)
-		return err
+
+	url := API_URL_BASE + fmt.Sprintf(ZONEQUICKVETO_URL, systemId, zone)
+	req, _ := http.NewRequest("DELETE", url, nil)
+
+	if _, err := doBody(c.client, req); err != nil {
+		return fmt.Errorf("could not stop quick veto: %w", err)
 	}
-	req.Header = c.getSensonetHttpHeader()
-	var resp []byte
-	log.Printf("Sending DELETE request to: %s\n", urlZoneQuickVeto)
-	resp, err = doBody(c.client, req)
-	if err != nil {
-		err = fmt.Errorf("could not stop quick veto. Error: %s", err)
-		log.Printf("Response: %s\n", resp)
-		return err
-	}
-	return err
+
+	return nil
 }
 
 func (c *Connection) StartHotWaterBoost(systemId string, hotwaterIndex int) error {
 	if hotwaterIndex < 0 {
 		hotwaterIndex = HOTWATERINDEX_DEFAULT
 	} // if parameter "hotwaterIndex" is negative, then the default value is used
-	urlHotwaterBoost := API_URL_BASE + fmt.Sprintf(HOTWATERBOOST_URL, systemId, hotwaterIndex)
-	mData, _ := json.Marshal(map[string]string{})
-	req, err := http.NewRequest("POST", urlHotwaterBoost, bytes.NewReader(mData))
-	if err != nil {
-		err = fmt.Errorf("client: could not create request: %s", err)
-		return err
-	}
-	req.Header = c.getSensonetHttpHeader()
+
+	url := API_URL_BASE + fmt.Sprintf(HOTWATERBOOST_URL, systemId, hotwaterIndex)
+	req, _ := http.NewRequest("POST", url, strings.NewReader("{}"))
 	req.Header.Set("Content-Type", "application/json")
-	var resp []byte
-	resp, err = doBody(c.client, req)
-	if err != nil {
-		err = fmt.Errorf("could not start hotwater boost. Error: %s", err)
-		log.Printf("Response: %s\n", resp)
-		return err
+
+	if _, err := doBody(c.client, req); err != nil {
+		return fmt.Errorf("could not start hotwater boost: %w", err)
 	}
-	return err
+
+	return nil
 }
 
 func (c *Connection) StopHotWaterBoost(systemId string, hotwaterIndex int) error {
 	if hotwaterIndex < 0 {
 		hotwaterIndex = HOTWATERINDEX_DEFAULT
 	} // if parameter "hotwaterIndex" is negative, then the default value is used
-	urlHotwaterBoost := API_URL_BASE + fmt.Sprintf(HOTWATERBOOST_URL, systemId, hotwaterIndex)
-	req, err := http.NewRequest("DELETE", urlHotwaterBoost, bytes.NewBuffer(nil))
-	if err != nil {
-		err = fmt.Errorf("client: could not create request: %s", err)
-		return err
+
+	url := API_URL_BASE + fmt.Sprintf(HOTWATERBOOST_URL, systemId, hotwaterIndex)
+	req, _ := http.NewRequest("DELETE", url, nil)
+
+	if _, err := doBody(c.client, req); err != nil {
+		return fmt.Errorf("could not stop hotwater boost: %w", err)
 	}
-	req.Header = c.getSensonetHttpHeader()
-	var resp []byte
-	resp, err = doBody(c.client, req)
-	if err != nil {
-		err = fmt.Errorf("could not stop hotwater boost. Error: %s", err)
-		log.Printf("Response: %s\n", resp)
-		return err
-	}
-	return err
+
+	return nil
 }
 
 func (c *Connection) StartStrategybased(systemId string, strategy int, heatingPar *HeatingParStruct, hotwaterPar *HotwaterParStruct) (string, error) {
 	c.homesAndSystemsCache.Reset()
 	state, err := c.GetSystem(systemId)
 	if err != nil {
-		err = fmt.Errorf("could not read homes and systems cache: %s", err)
-		return "", err
+		return "", fmt.Errorf("could not read homes and systems cache: %w", err)
 	}
 	c.refreshCurrentQuickMode(&state)
 	// Extracting correct State.Dhw element
@@ -345,8 +325,7 @@ func (c *Connection) StopStrategybased(systemId string, strategy int, heatingPar
 	c.homesAndSystemsCache.Reset()
 	state, err := c.GetSystem(systemId)
 	if err != nil {
-		err = fmt.Errorf("could not read system state: %s", err)
-		return "", err
+		return "", fmt.Errorf("could not read system state: %w", err)
 	}
 	c.refreshCurrentQuickMode(&state)
 	// Extracting correct State.Dhw element
@@ -465,15 +444,16 @@ func (c *Connection) GetDeviceData(systemid string, whichDevices int) ([]DeviceA
 // Returns the energy data systemId
 func (c *Connection) GetEnergyData(systemid, deviceUuid, operationMode, energyType, resolution string, startDate, endDate time.Time) (EnergyData, error) {
 	var energyData EnergyData
-	v := url.Values{}
-	v.Set("resolution", resolution)
-	v.Add("operationMode", operationMode)
-	v.Add("energyType", energyType)
-	v.Add("startDate", startDate.Format("2006-01-02T15:04:05-07:00"))
-	v.Add("endDate", endDate.Format("2006-01-02T15:04:05-07:00"))
+	v := url.Values{
+		"resolution":    {resolution},
+		"operationMode": {operationMode},
+		"energyType":    {energyType},
+		"startDate":     {startDate.Format("2006-01-02T15:04:05-07:00")},
+		"endDate":       {endDate.Format("2006-01-02T15:04:05-07:00")},
+	}
+
 	url := API_URL_BASE + fmt.Sprintf(ENERGY_URL, systemid, deviceUuid) + v.Encode()
 	req, _ := http.NewRequest("GET", url, nil)
-	req.Header = c.getSensonetHttpHeader()
 	if err := doJSON(c.client, req, &energyData); err != nil {
 		return energyData, fmt.Errorf("error getting energy data for %s: %w", deviceUuid, err)
 	}
