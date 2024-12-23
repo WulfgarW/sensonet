@@ -28,15 +28,14 @@ type headerTransport struct {
 }
 
 func (t *headerTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	h := http.Header{
+	for k, v := range (http.Header{
 		"Accept-Language":           {"en-GB"},
 		"Accept":                    {"application/json, text/plain, */*"},
 		"x-app-identifier":          {"VAILLANT"},
 		"x-client-locale":           {"en-GB"},
 		"x-idm-identifier":          {"KEYCLOAK"},
 		"ocp-apim-subscription-key": {"1e0a2f3511fb4c5bbb1c7f9fedd20b1c"},
-	}
-	for k, v := range h {
+	}) {
 		for _, vv := range v {
 			req.Header.Add(k, vv)
 		}
