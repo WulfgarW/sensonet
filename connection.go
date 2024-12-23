@@ -24,7 +24,7 @@ type Connection struct {
 }
 
 type headerTransport struct {
-	Base http.RoundTripper
+	http.RoundTripper
 }
 
 func (t *headerTransport) RoundTrip(req *http.Request) (*http.Response, error) {
@@ -42,7 +42,7 @@ func (t *headerTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 		}
 	}
 
-	return t.Base.RoundTrip(req)
+	return t.RoundTrip(req)
 }
 
 // NewConnection creates a new Sensonet device connection.
@@ -50,7 +50,7 @@ func NewConnection(client *http.Client, ts oauth2.TokenSource) (*Connection, err
 	client.Transport = &oauth2.Transport{
 		Source: ts,
 		Base: &headerTransport{
-			Base: client.Transport,
+			client.Transport,
 		},
 	}
 
