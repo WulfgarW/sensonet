@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"net/url"
 	"strings"
@@ -12,6 +11,20 @@ import (
 
 	"golang.org/x/oauth2"
 )
+
+type Logger interface {
+	Debug(msg string)
+	Info(msg string)
+	Warn(msg string)
+	Error(msg string)
+	Fatal(msg string)
+}
+
+var logger Logger
+
+func NewLogger(log Logger) {
+	logger = log
+}
 
 // Connection is the Sensonet connection
 type Connection struct {
@@ -130,15 +143,21 @@ func (c *Connection) refreshCurrentQuickMode(state *SystemStatus) {
 	if newQuickMode != c.currentQuickmode {
 		if newQuickMode == "" && time.Now().After(c.quickmodeStarted.Add(c.cache)) {
 			if c.currentQuickmode == QUICKMODE_NOTHING && time.Now().Before(c.quickmodeStarted.Add(10*time.Minute)) {
-				log.Println("Idle mode active for less then 10 minutes. Keeping the idle mode")
+				if _, ok := logger.(Logger); ok {
+					logger.Debug("Idle mode active for less then 10 minutes. Keeping the idle mode")
+				}
 			} else {
-				log.Printf("Old quickmode: \"%s\"   New quickmode: \"%s\"", c.currentQuickmode, newQuickMode)
+				if _, ok := logger.(Logger); ok {
+					logger.Debug(fmt.Sprintf("Old quickmode: \"%s\"   New quickmode: \"%s\"", c.currentQuickmode, newQuickMode))
+				}
 				c.currentQuickmode = newQuickMode
 				c.quickmodeStopped = time.Now()
 			}
 		}
 		if newQuickMode != "" && time.Now().After(c.quickmodeStopped.Add(c.cache)) {
-			log.Printf("Old quickmode: \"%s\"   New quickmode: \"%s\"", c.currentQuickmode, newQuickMode)
+			if _, ok := logger.(Logger); ok {
+				logger.Debug(fmt.Sprintf("Old quickmode: \"%s\"   New quickmode: \"%s\"", c.currentQuickmode, newQuickMode))
+			}
 			c.currentQuickmode = newQuickMode
 			c.quickmodeStarted = time.Now()
 		}
@@ -272,15 +291,19 @@ func (c *Connection) StartStrategybased(systemId string, strategy int, heatingPa
 	zoneData := GetZoneData(state, heatingPar.ZoneIndex)
 
 	if c.currentQuickmode != "" {
-		log.Println("System is already in quick mode: ", c.currentQuickmode)
-		log.Println("Is there any need to change that?")
-		log.Println("Special Function of Dhw: ", dhwData.State.CurrentSpecialFunction)
-		log.Println("Special Function of Heating Zone: ", zoneData.State.CurrentSpecialFunction)
+		if _, ok := logger.(Logger); ok {
+			logger.Warn(fmt.Sprint("System is already in quick mode:", c.currentQuickmode))
+			logger.Warn("Is there any need to change that?")
+			logger.Debug(fmt.Sprint("Special Function of Dhw: ", dhwData.State.CurrentSpecialFunction))
+			logger.Debug(fmt.Sprint("Special Function of Heating Zone: ", zoneData.State.CurrentSpecialFunction))
+		}
 		return QUICKMODE_ERROR_ALREADYON, err
 	}
 
 	whichQuickMode := c.WhichQuickMode(dhwData, zoneData, strategy, heatingPar, hotwaterPar)
-	log.Println("WhichQuickMode()=", whichQuickMode)
+	if _, ok := logger.(Logger); ok {
+		logger.Debug(fmt.Sprint("whichQuickMode=", whichQuickMode))
+	}
 
 	switch whichQuickMode {
 	case 1:
@@ -288,33 +311,43 @@ func (c *Connection) StartStrategybased(systemId string, strategy int, heatingPa
 		if err == nil {
 			c.currentQuickmode = QUICKMODE_HOTWATER
 			c.quickmodeStarted = time.Now()
-			log.Println("Starting quick mode (hotwater boost)", c.currentQuickmode)
+			if _, ok := logger.(Logger); ok {
+				logger.Info("Starting hotwater boost")
+			}
 		}
 	case 2:
 		err = c.StartZoneQuickVeto(systemId, heatingPar.ZoneIndex, heatingPar.VetoSetpoint, heatingPar.VetoDuration)
 		if err == nil {
 			c.currentQuickmode = QUICKMODE_HEATING
 			c.quickmodeStarted = time.Now()
-			log.Println("Starting zone quick veto")
+			if _, ok := logger.(Logger); ok {
+				logger.Info("Starting zone quick veto")
+			}
 		}
 	default:
 		if c.currentQuickmode == QUICKMODE_HOTWATER {
 			// if hotwater boost active, then stop it
 			err = c.StopHotWaterBoost(systemId, hotwaterPar.Index)
 			if err == nil {
-				log.Println("Stopping Hotwater Boost")
+				if _, ok := logger.(Logger); ok {
+					logger.Info("Stopping hotwater boost")
+				}
 			}
 		}
 		if c.currentQuickmode == QUICKMODE_HEATING {
 			// if zone quick veto active, then stop it
 			err = c.StopZoneQuickVeto(systemId, heatingPar.ZoneIndex)
 			if err == nil {
-				log.Println("Stopping Zone Quick Veto")
+				if _, ok := logger.(Logger); ok {
+					logger.Info("Stopping zone quick veto")
+				}
 			}
 		}
 		c.currentQuickmode = QUICKMODE_NOTHING
 		c.quickmodeStarted = time.Now()
-		log.Println("Enable called but no quick mode possible. Starting idle mode")
+		if _, ok := logger.(Logger); ok {
+			logger.Info("Enable called but no quick mode possible. Starting idle mode")
+		}
 	}
 
 	c.homesAndSystemsCache.Reset()
@@ -333,24 +366,34 @@ func (c *Connection) StopStrategybased(systemId string, heatingPar *HeatingParSt
 	// Extracting correct State.Zone element
 	zoneData := GetZoneData(state, heatingPar.ZoneIndex)
 
-	log.Println("Operationg Mode of Dhw: ", dhwData.State.CurrentSpecialFunction)
-	log.Println("Operationg Mode of Heating: ", zoneData.State.CurrentSpecialFunction)
+	if _, ok := logger.(Logger); ok {
+		logger.Debug(fmt.Sprint("Operationg Mode of Dhw: ", dhwData.State.CurrentSpecialFunction))
+		logger.Debug(fmt.Sprint("Operationg Mode of Heating: ", zoneData.State.CurrentSpecialFunction))
+	}
 
 	switch c.currentQuickmode {
 	case QUICKMODE_HOTWATER:
 		err = c.StopHotWaterBoost(systemId, hotwaterPar.Index)
 		if err == nil {
-			log.Println("Stopping Quick Mode", c.currentQuickmode)
+			if _, ok := logger.(Logger); ok {
+				logger.Info(fmt.Sprint("Stopping quick mode", c.currentQuickmode))
+			}
 		}
 	case QUICKMODE_HEATING:
 		err = c.StopZoneQuickVeto(systemId, heatingPar.ZoneIndex)
 		if err == nil {
-			log.Println("Stopping Zone Quick Veto")
+			if _, ok := logger.(Logger); ok {
+				logger.Info("Stopping zone quick veto")
+			}
 		}
 	case QUICKMODE_NOTHING:
-		log.Println("Stopping idle quick mode")
+		if _, ok := logger.(Logger); ok {
+			logger.Info("Stopping idle quick mode")
+		}
 	default:
-		log.Println("Nothing to do, no quick mode active")
+		if _, ok := logger.(Logger); ok {
+			logger.Info("Nothing to do, no quick mode active")
+		}
 	}
 	c.currentQuickmode = ""
 	c.quickmodeStopped = time.Now()
@@ -362,7 +405,9 @@ func (c *Connection) StopStrategybased(systemId string, heatingPar *HeatingParSt
 // This function checks the operation mode of heating and hotwater and the hotwater live temperature
 // and returns, which quick mode should be started, when evcc sends an "Enable"
 func (c *Connection) WhichQuickMode(dhwData *DhwData, zoneData *ZoneData, strategy int, heatingPar *HeatingParStruct, hotwater *HotwaterParStruct) int {
-	log.Println("Strategy = ", strategy)
+	if _, ok := logger.(Logger); ok {
+		logger.Info(fmt.Sprint("Strategy = ", strategy))
+	}
 	// log.Printf("Checking if hot water boost possible. Operation Mode = %s, temperature setpoint= %02.2f, live temperature= %02.2f", res.Hotwater.OperationMode, res.Hotwater.HotwaterTemperatureSetpoint, res.Hotwater.HotwaterLiveTemperature)
 	// For strategy=STRATEGY_HOTWATER, a hotwater boost is possible when hotwater storage temperature is less than the temperature setpoint.
 	// For other strategies, a hotwater boost is possible when hotwater storage temperature is less than the temperature setpoint minus 5°C
@@ -390,13 +435,17 @@ func (c *Connection) WhichQuickMode(dhwData *DhwData, zoneData *ZoneData, strate
 		if hotWaterBoostPossible {
 			whichQuickMode = 1
 		} else {
-			log.Println("Strategy = hotwater, but hotwater boost not possible")
+			if _, ok := logger.(Logger); ok {
+				logger.Info("Strategy = hotwater, but hotwater boost not possible")
+			}
 		}
 	case STRATEGY_HEATING:
 		if heatingQuickVetoPossible {
 			whichQuickMode = 2
 		} else {
-			log.Println("Strategy = heating, but heating quick veto not possible")
+			if _, ok := logger.(Logger); ok {
+				logger.Info("Strategy = heating, but zone quick veto not possible")
+			}
 		}
 	case STRATEGY_HOTWATER_THEN_HEATING:
 		if hotWaterBoostPossible {
@@ -405,7 +454,9 @@ func (c *Connection) WhichQuickMode(dhwData *DhwData, zoneData *ZoneData, strate
 			if heatingQuickVetoPossible {
 				whichQuickMode = 2
 			} else {
-				log.Println("Strategy = hotwater_then_heating, but both not possible")
+				if _, ok := logger.(Logger); ok {
+					logger.Info("Strategy = hotwater_then_heating, but both not possible")
+				}
 			}
 		}
 	}

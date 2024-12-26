@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -20,7 +21,7 @@ const TOKEN_FILE = ".sensonet-token.json"
 const CREDENTIALS_FILE = ".sensonet-credentials.json"
 
 // Timeout is the default request timeout used by the Helper
-var Timeout = 10 * time.Second
+var Timeout = 15 * time.Second
 
 func readCredentials(filename string) (*sensonet.CredentialsStruct, error) {
 	b, err := os.ReadFile(filename)
@@ -110,12 +111,42 @@ func printKeyBinding() {
 	fmt.Println("   5 = Start zone quick veto")
 	fmt.Println("   6 = Start strategy based quick mode")
 	fmt.Println("   7 = Stop hotwater boost")
-	fmt.Println("   8 = Stopt zone quick veto")
+	fmt.Println("   8 = Stop zone quick veto")
 	fmt.Println("   9 = Stop strategy based quick mode")
 	fmt.Println("   h = Show key bindings")
 	fmt.Println("   q = Quit")
 	fmt.Println("#############################################")
 	fmt.Println("")
+}
+
+// Implementation of log functions for the logger interface of the sensonet library
+type SLogger struct {
+	logger *log.Logger
+}
+
+func NewSLogLogger() *SLogger {
+	logger := log.New(os.Stderr, "sensonetlogger: ", log.Lshortfile)
+	return &SLogger{logger: logger}
+}
+
+func (l *SLogger) Info(msg string) {
+	l.logger.Println(fmt.Sprint("Info: ", msg))
+}
+
+func (l *SLogger) Debug(msg string) {
+	l.logger.Println(fmt.Sprint("Debug: ", msg))
+}
+
+func (l *SLogger) Warn(msg string) {
+	l.logger.Println(fmt.Sprint("Warning: ", msg))
+}
+
+func (l *SLogger) Error(msg string) {
+	l.logger.Println(fmt.Sprint("Error: ", msg))
+}
+
+func (l *SLogger) Fatal(msg string) {
+	l.logger.Fatalln(fmt.Sprint("Fatal: ", msg))
 }
 
 func main() {
@@ -149,27 +180,30 @@ func main() {
 
 	clientlogger.SetOutput(io.Discard) // comment this out, if you want logging in http client
 	client := NewClient(clientlogger)
-	// NewIdentity() initialises the oauth2 authorisation and returns.
-	// Call id.Login() with user and password returns a valid tokenSource
-	id, err := sensonet.NewIdentity(client, credentials.Realm)
+	// Implements a logger for the sensonet library
+	//slogger := NewSLogLogger() // Comment this out, if you want no sensonetlogging
+	//sensonet.NewLogger(slogger) // Comment this out, if you want no sensonetlogging
+
+	// If you have user, password and realm, use Oauth2ConfigForRealm() and PasswordCredentialsToken() to get a token
+	ctx := context.WithValue(context.TODO(), oauth2.HTTPClient, client)
+	clientCtx := context.WithValue(ctx, oauth2.HTTPClient, client)
+	oc := sensonet.Oauth2ConfigForRealm(credentials.Realm)
+	token, err = oc.PasswordCredentialsToken(clientCtx, credentials.User, credentials.Password)
 	if err != nil {
 		logger.Fatal(err)
 	}
-	ts, err := id.Login(credentials.User, credentials.Password)
-	if err != nil {
-		logger.Fatal(err)
-	}
+
 	// Opens the connection to the myVaillant portal and returns a connection object for further function calls
-	conn, err := sensonet.NewConnection(client, ts)
+	conn, err := sensonet.NewConnection(client, oc.TokenSource(clientCtx, token))
 	if err != nil {
 		logger.Fatal(err)
 	}
 
 	// Store the current token in a file for future calls of this program
-	newToken, err := ts.Token()
+	/*newToken, err := ts.Token()
 	if err := writeToken(TOKEN_FILE, newToken); err != nil {
 		logger.Fatal(err)
-	}
+	}*/
 
 	fmt.Println("Fourth step: Reading Homes() structure from myVaillant portal")
 	homes, err := conn.GetHomes()
@@ -208,8 +242,8 @@ func main() {
 				}
 				fmt.Printf("   Got %d devices\n ", len(devices))
 				fmt.Println("Reading energy data")
-				startDate, _ := time.Parse("2006-01-02 15:04:05MST", "2024-11-01 00:00:00CET")
-				endDate, _ := time.Parse("2006-01-02 15:04:05MST", "2024-11-20 23:59:59CET")
+				startDate, _ := time.Parse("2006-01-02 15:04:05MST", "2024-12-01 00:00:00CET")
+				endDate, _ := time.Parse("2006-01-02 15:04:05MST", "2024-12-20 23:59:59CET")
 				for _, dev := range devices {
 					for _, data := range dev.Device.Data {
 						energyData, err := conn.GetEnergyData(systemID, dev.Device.DeviceUUID, data.OperationMode, data.ValueType, sensonet.RESOLUTION_DAY,
@@ -242,7 +276,7 @@ func main() {
 				if err != nil {
 					logger.Println(err)
 				} else {
-					fmt.Printf("result=\"%s\"\n", result)
+					fmt.Printf("result of function StartStrategybased()=\"%s\"\n", result)
 				}
 			case i == rune('7'):
 				fmt.Println("Stopping hotwater boost")
@@ -262,7 +296,7 @@ func main() {
 				if err != nil {
 					logger.Println(err)
 				} else {
-					fmt.Printf("result=\"%s\"\n", result)
+					fmt.Printf("result of function StopStrategybased()=\"%s\"\n", result)
 				}
 			case i == rune('h'):
 				printKeyBinding()
