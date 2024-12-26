@@ -10,7 +10,6 @@ import (
 	"net/url"
 	"regexp"
 	"strings"
-	"time"
 
 	"github.com/coreos/go-oidc/v3/oidc"
 
@@ -19,49 +18,42 @@ import (
 
 const REALM_GERMANY = "vaillant-germany-b2c"
 
-// Timeout is the default request timeout used by the Helper
-var timeout = 10 * time.Second
+type Oauth2Config struct {
+	*oauth2.Config
+}
 
-func Oauth2ConfigForRealm(realm string) *oauth2.Config {
+func Oauth2ConfigForRealm(realm string) *Oauth2Config {
 	if realm == "" {
 		realm = REALM_GERMANY
 	}
-	return &oauth2.Config{
-		ClientID: CLIENT_ID,
-		Endpoint: oauth2.Endpoint{
-			AuthURL:  fmt.Sprintf(AUTH_URL, realm),
-			TokenURL: fmt.Sprintf(TOKEN_URL, realm),
+	return &Oauth2Config{
+		Config: &oauth2.Config{
+			ClientID: CLIENT_ID,
+			Endpoint: oauth2.Endpoint{
+				AuthURL:  fmt.Sprintf(AUTH_URL, realm),
+				TokenURL: fmt.Sprintf(TOKEN_URL, realm),
+			},
+			RedirectURL: REDIRECT_URL,
+			Scopes:      []string{oidc.ScopeOpenID, oidc.ScopeOfflineAccess},
 		},
-		RedirectURL: REDIRECT_URL,
-		Scopes:      []string{oidc.ScopeOpenID, oidc.ScopeOfflineAccess},
 	}
 }
 
-type Identity struct {
-	client *http.Client
-	oc     *oauth2.Config
-}
+func (oc *Oauth2Config) PasswordCredentialsToken(ctx context.Context, username string, password string) (*oauth2.Token, error) {
+	client, ok := ctx.Value(oauth2.HTTPClient).(*http.Client)
+	if !ok {
+		client = new(http.Client)
+	}
 
-func NewIdentity(client *http.Client, realm string) (*Identity, error) {
 	client.Jar, _ = cookiejar.New(nil)
 	client.CheckRedirect = func(req *http.Request, via []*http.Request) error {
 		return http.ErrUseLastResponse
 	}
 
-	v := &Identity{
-		client: client,
-		oc:     Oauth2ConfigForRealm(realm),
-	}
-
-	return v, nil
-}
-
-func (v *Identity) Login(user, password string) (oauth2.TokenSource, error) {
 	cv := oauth2.GenerateVerifier()
-	ctx := context.WithValue(context.TODO(), oauth2.HTTPClient, v.client)
 
-	uri := v.oc.AuthCodeURL(cv, oauth2.S256ChallengeOption(cv), oauth2.SetAuthURLParam("code", "code_challenge"))
-	resp, err := v.client.Get(uri)
+	uri := oc.AuthCodeURL(cv, oauth2.S256ChallengeOption(cv), oauth2.SetAuthURLParam("code", "code_challenge"))
+	resp, err := client.Get(uri)
 	if err != nil {
 		return nil, err
 	}
@@ -79,7 +71,7 @@ func (v *Identity) Login(user, password string) (oauth2.TokenSource, error) {
 	uri = match[1]
 
 	params := url.Values{
-		"username":     {user},
+		"username":     {username},
 		"password":     {password},
 		"credentialId": {""},
 	}
@@ -87,7 +79,7 @@ func (v *Identity) Login(user, password string) (oauth2.TokenSource, error) {
 	req, _ := http.NewRequest("POST", uri, strings.NewReader(params.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
-	resp, err = v.client.Do(req)
+	resp, err = client.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -98,12 +90,5 @@ func (v *Identity) Login(user, password string) (oauth2.TokenSource, error) {
 		return nil, errors.New("could not get code")
 	}
 
-	token, err := v.oc.Exchange(ctx, code, oauth2.VerifierOption(cv))
-	if err != nil {
-		return nil, fmt.Errorf("could not get token: %w", err)
-	}
-
-	ts := v.oc.TokenSource(ctx, token)
-
-	return ts, nil
+	return oc.Exchange(ctx, code, oauth2.VerifierOption(cv))
 }
