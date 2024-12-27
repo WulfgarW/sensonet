@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"log"
 	"net/http"
 	"os"
@@ -19,6 +18,8 @@ import (
 
 const TOKEN_FILE = ".sensonet-token.json"
 const CREDENTIALS_FILE = ".sensonet-credentials.json"
+const WITH_SENSONET_LOGGING = true    // Set this to false if you want no sensonet logging
+const WITH_HTTP_CLIENT_LOGGING = true // Set this to false if you want no http client logging in the sensonet library
 
 // Timeout is the default request timeout used by the Helper
 var Timeout = 15 * time.Second
@@ -51,6 +52,35 @@ func writeToken(filename string, token *oauth2.Token) error {
 	return os.WriteFile(filename, b, 0o644)
 }
 
+func readKey(input chan rune) {
+	for {
+		char, _, err := keyboard.GetSingleKey()
+		//char, _, err := reader.ReadRune()
+		if err != nil {
+			log.Fatal(err)
+		}
+		input <- char
+	}
+}
+
+func printKeyBinding() {
+	fmt.Println("#############################################")
+	fmt.Println("Choose an action:")
+	fmt.Println("   1 = Read device and energy data")
+	fmt.Println("   4 = Start hotwater boost")
+	fmt.Println("   5 = Start zone quick veto")
+	fmt.Println("   6 = Start strategy based quick mode")
+	fmt.Println("   7 = Stop hotwater boost")
+	fmt.Println("   8 = Stop zone quick veto")
+	fmt.Println("   9 = Stop strategy based quick mode")
+	fmt.Println("   h = Show key bindings")
+	fmt.Println("   q = Quit")
+	fmt.Println("#############################################")
+	fmt.Println("")
+}
+
+// Implementation of log functions for the http client in the sensonet library
+// (not necessary, if you don't want to log the http client in the sensonet library)
 type httpLogger struct {
 	log *log.Logger
 }
@@ -84,42 +114,21 @@ func (l *httpLogger) LogResponse(req *http.Request, res *http.Response, err erro
 	}
 }
 
-// NewClient creates http client with default transport
-func NewClient(log *log.Logger) *http.Client {
+func NewClientWithLog(log *log.Logger) *http.Client {
 	return &http.Client{
 		Timeout:   Timeout,
 		Transport: httplogger.NewLoggedTransport(http.DefaultTransport, newLogger(log)),
 	}
 }
 
-func readKey(input chan rune) {
-	for {
-		char, _, err := keyboard.GetSingleKey()
-		//char, _, err := reader.ReadRune()
-		if err != nil {
-			log.Fatal(err)
-		}
-		input <- char
+func NewClient() *http.Client {
+	return &http.Client{
+		Timeout: Timeout,
 	}
 }
 
-func printKeyBinding() {
-	fmt.Println("#############################################")
-	fmt.Println("Choose an action:")
-	fmt.Println("   1 = Read device and energy data")
-	fmt.Println("   4 = Start hotwater boost")
-	fmt.Println("   5 = Start zone quick veto")
-	fmt.Println("   6 = Start strategy based quick mode")
-	fmt.Println("   7 = Stop hotwater boost")
-	fmt.Println("   8 = Stop zone quick veto")
-	fmt.Println("   9 = Stop strategy based quick mode")
-	fmt.Println("   h = Show key bindings")
-	fmt.Println("   q = Quit")
-	fmt.Println("#############################################")
-	fmt.Println("")
-}
-
 // Implementation of log functions for the logger interface of the sensonet library
+// (not necessary, if you don't want to use the logger interface)
 type SLogger struct {
 	logger *log.Logger
 }
@@ -129,30 +138,14 @@ func NewSLogLogger() *SLogger {
 	return &SLogger{logger: logger}
 }
 
-func (l *SLogger) Info(msg string) {
-	l.logger.Println(fmt.Sprint("Info: ", msg))
+func (l *SLogger) Printf(msg string, arg ...any) {
+	l.logger.Println(fmt.Sprint("Debug: ", msg, arg))
 }
 
-func (l *SLogger) Debug(msg string) {
-	l.logger.Println(fmt.Sprint("Debug: ", msg))
-}
-
-func (l *SLogger) Warn(msg string) {
-	l.logger.Println(fmt.Sprint("Warning: ", msg))
-}
-
-func (l *SLogger) Error(msg string) {
-	l.logger.Println(fmt.Sprint("Error: ", msg))
-}
-
-func (l *SLogger) Fatal(msg string) {
-	l.logger.Fatalln(fmt.Sprint("Fatal: ", msg))
-}
-
+// Main program
 func main() {
 	var (
-		logger       = log.New(os.Stderr, "sensonet: ", log.Lshortfile)
-		clientlogger = log.New(os.Stderr, "client: ", log.Lshortfile)
+		logger = log.New(os.Stderr, "sensonet: ", log.Lshortfile)
 	)
 
 	fmt.Println("Sample program to show how to use the sensonet library functions.")
@@ -178,11 +171,16 @@ func main() {
 
 	fmt.Println("Third step: Generating new connection to be used for further calls of sensonet library")
 
-	clientlogger.SetOutput(io.Discard) // comment this out, if you want logging in http client
-	client := NewClient(clientlogger)
-	// Implements a logger for the sensonet library
-	//slogger := NewSLogLogger() // Comment this out, if you want no sensonetlogging
-	//sensonet.NewLogger(slogger) // Comment this out, if you want no sensonetlogging
+	var client *http.Client
+	var clientlogger *log.Logger
+	//if WITH_HTTP_CLIENT_LOGGING {
+	//clientlogger = log.New(os.Stderr, "client: ", log.Lshortfile)
+	clientlogger = log.New(os.Stdout, "client: ", log.Lshortfile)
+	client = NewClientWithLog(clientlogger)
+
+	//} else {
+	//	client = NewClient()
+	//}
 
 	// If you have user, password and realm, use Oauth2ConfigForRealm() and PasswordCredentialsToken() to get a token
 	ctx := context.WithValue(context.TODO(), oauth2.HTTPClient, client)
@@ -194,16 +192,22 @@ func main() {
 	}
 
 	// Opens the connection to the myVaillant portal and returns a connection object for further function calls
-	conn, err := sensonet.NewConnection(client, oc.TokenSource(clientCtx, token))
+	var conn *sensonet.Connection
+	if WITH_SENSONET_LOGGING {
+		// Implements a logger for the sensonet library
+		slogger := NewSLogLogger() // Comment this out, if you want no sensonetlogging
+		conn, err = sensonet.NewConnection(client, oc.TokenSource(clientCtx, token), sensonet.WithLogger(slogger))
+	} else {
+		conn, err = sensonet.NewConnection(client, oc.TokenSource(clientCtx, token))
+	}
 	if err != nil {
 		logger.Fatal(err)
 	}
 
 	// Store the current token in a file for future calls of this program
-	/*newToken, err := ts.Token()
-	if err := writeToken(TOKEN_FILE, newToken); err != nil {
+	if err := writeToken(TOKEN_FILE, token); err != nil {
 		logger.Fatal(err)
-	}*/
+	}
 
 	fmt.Println("Fourth step: Reading Homes() structure from myVaillant portal")
 	homes, err := conn.GetHomes()
