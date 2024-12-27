@@ -20,7 +20,7 @@ func (t *transport) RoundTrip(req *http.Request) (*http.Response, error) {
 		}
 	}
 
-	resp, err := http.DefaultTransport.RoundTrip(req)
+	resp, err := t.RoundTripper.RoundTrip(req)
 	if err == nil {
 		err = ResponseError(resp)
 	}
