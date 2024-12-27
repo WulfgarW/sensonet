@@ -12,18 +12,6 @@ import (
 	"golang.org/x/oauth2"
 )
 
-type Logger interface {
-	Printf(msg string, arg ...any)
-}
-
-type Option func(*Connection)
-
-func WithLogger(logger Logger) Option {
-	return func(c *Connection) {
-		c.logger = logger
-	}
-}
-
 // Connection is the Sensonet connection
 type Connection struct {
 	client               *http.Client
@@ -35,44 +23,24 @@ type Connection struct {
 	quickmodeStopped     time.Time
 }
 
-type sensonetHeaders struct {
-	http.RoundTripper
-}
-
-func (t *sensonetHeaders) RoundTrip(req *http.Request) (*http.Response, error) {
-	for k, v := range (http.Header{
-		"Accept-Language":           {"en-GB"},
-		"Accept":                    {"application/json, text/plain, */*"},
-		"x-app-identifier":          {"VAILLANT"},
-		"x-client-locale":           {"en-GB"},
-		"x-idm-identifier":          {"KEYCLOAK"},
-		"ocp-apim-subscription-key": {"1e0a2f3511fb4c5bbb1c7f9fedd20b1c"},
-	}) {
-		for _, vv := range v {
-			req.Header.Add(k, vv)
-		}
-	}
-	return http.DefaultTransport.RoundTrip(req)
-}
-
 // NewConnection creates a new Sensonet device connection.
-func NewConnection(client *http.Client, ts oauth2.TokenSource, opts ...Option) (*Connection, error) {
-	client.Transport = &oauth2.Transport{
-		Source: ts,
-		Base: &sensonetHeaders{
-			client.Transport,
-		},
-	}
-
+func NewConnection(ts oauth2.TokenSource, opts ...Option) (*Connection, error) {
 	conn := &Connection{
-		client:           client,
+		client:           new(http.Client),
 		cache:            90 * time.Second,
-		currentQuickmode: "", // assuming that no quick mode is active
 		quickmodeStarted: time.Now(),
 		quickmodeStopped: time.Now().Add(-2 * time.Minute), // time stamp is set in the past so that first call of refreshCurrentQuickMode() changes currentQuickmode if necessary
 	}
+
 	for _, opt := range opts {
 		opt(conn)
+	}
+
+	conn.client.Transport = &oauth2.Transport{
+		Source: ts,
+		Base: &transport{
+			conn.client.Transport,
+		},
 	}
 
 	conn.homesAndSystemsCache = ResettableCached(func() (HomesAndSystems, error) {
@@ -86,9 +54,10 @@ func NewConnection(client *http.Client, ts oauth2.TokenSource, opts ...Option) (
 
 func (conn *Connection) debug(fmt string, arg ...any) {
 	if conn.logger != nil {
-		conn.logger.Printf(fmt, arg)
+		conn.logger.Printf(fmt, arg...)
 	}
 }
+
 func (c *Connection) GetCurrentQuickMode() string {
 	return c.currentQuickmode
 }
