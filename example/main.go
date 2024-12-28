@@ -22,7 +22,7 @@ const WITH_SENSONET_LOGGING = true    // Set this to false if you want no senson
 const WITH_HTTP_CLIENT_LOGGING = true // Set this to false if you want no http client logging in the sensonet library
 
 // Timeout is the default request timeout used by the Helper
-var Timeout = 15 * time.Second
+var Timeout = 30 * time.Second // Fetching energy data can take some time
 
 func readCredentials(filename string) (*sensonet.CredentialsStruct, error) {
 	b, err := os.ReadFile(filename)
@@ -55,7 +55,6 @@ func writeToken(filename string, token *oauth2.Token) error {
 func readKey(input chan rune) {
 	for {
 		char, _, err := keyboard.GetSingleKey()
-		//char, _, err := reader.ReadRune()
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -172,15 +171,7 @@ func main() {
 	fmt.Println("Third step: Generating new connection to be used for further calls of sensonet library")
 
 	var client *http.Client
-	var clientlogger *log.Logger
-	//if WITH_HTTP_CLIENT_LOGGING {
-	//clientlogger = log.New(os.Stderr, "client: ", log.Lshortfile)
-	clientlogger = log.New(os.Stdout, "client: ", log.Lshortfile)
-	client = NewClientWithLog(clientlogger)
-
-	//} else {
-	//	client = NewClient()
-	//}
+	client = NewClient()
 
 	// If you have user, password and realm, use Oauth2ConfigForRealm() and PasswordCredentialsToken() to get a token
 	ctx := context.WithValue(context.TODO(), oauth2.HTTPClient, client)
@@ -191,14 +182,29 @@ func main() {
 		logger.Fatal(err)
 	}
 
-	// Opens the connection to the myVaillant portal and returns a connection object for further function calls
+	// If http client logging is wanted, you have to prepare an http client with logging
+	if WITH_HTTP_CLIENT_LOGGING {
+		clientlogger := log.New(os.Stderr, "client: ", log.Lshortfile)
+		client = NewClientWithLog(clientlogger)
+	}
+
+	// NewConnection() opens the connection to the myVaillant portal and returns a connection object for further function calls.
+	// You can provide a logger and http client (especially one with logging) as optional parameters.
 	var conn *sensonet.Connection
 	if WITH_SENSONET_LOGGING {
 		// Implements a logger for the sensonet library
-		slogger := NewSLogLogger() // Comment this out, if you want no sensonetlogging
-		conn, err = sensonet.NewConnection(client, oc.TokenSource(clientCtx, token), sensonet.WithLogger(slogger))
+		slogger := NewSLogLogger()
+		if WITH_HTTP_CLIENT_LOGGING {
+			conn, err = sensonet.NewConnection(oc.TokenSource(clientCtx, token), sensonet.WithLogger(slogger), sensonet.WithHttpClient(client))
+		} else {
+			conn, err = sensonet.NewConnection(oc.TokenSource(clientCtx, token), sensonet.WithLogger(slogger))
+		}
 	} else {
-		conn, err = sensonet.NewConnection(client, oc.TokenSource(clientCtx, token))
+		if WITH_HTTP_CLIENT_LOGGING {
+			conn, err = sensonet.NewConnection(oc.TokenSource(clientCtx, token), sensonet.WithHttpClient(client))
+		} else {
+			conn, err = sensonet.NewConnection(oc.TokenSource(clientCtx, token))
+		}
 	}
 	if err != nil {
 		logger.Fatal(err)
@@ -214,17 +220,17 @@ func main() {
 	if err != nil {
 		logger.Fatal(err)
 	}
-	//We use the system ID of the first element (=index 0) of homes[]
+	// We use the system ID of the first element (=index 0) of homes[]
 	systemID := homes[0].SystemID
 
 	var heatingPar sensonet.HeatingParStruct
 	var hotwaterPar sensonet.HotwaterParStruct
 	heatingPar.ZoneIndex = 0
 	heatingPar.VetoSetpoint = 18.0
-	heatingPar.VetoDuration = -1.0 //negative value means: use default
-	hotwaterPar.Index = -1         //negative value means: use default
+	heatingPar.VetoDuration = -1.0 // negative value means: use default
+	hotwaterPar.Index = -1         // negative value means: use default
 
-	//Create a channel to read, if a key was pressed
+	// Create a channel to read, if a key was pressed
 	if err := keyboard.Open(); err != nil {
 		panic(err)
 	}
@@ -236,7 +242,6 @@ func main() {
 	for {
 		select {
 		case i := <-input:
-			//fmt.Println(i)
 			switch {
 			case i == rune('1'):
 				fmt.Println("Getting device data")
