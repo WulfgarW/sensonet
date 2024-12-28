@@ -55,6 +55,10 @@ const (
 	RESOLUTION_MONTH = "MONTH"
 )
 
+type Logger interface {
+	Printf(msg string, arg ...any)
+}
+
 type CredentialsStruct struct {
 	User     string `json:"user"`
 	Password string `json:"password"`
