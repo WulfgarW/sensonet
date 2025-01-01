@@ -1,80 +1,80 @@
 package sensonet
 
-func GetDhwData(state SystemStatus, index int) *DhwData {
+func GetDhwData(state *System, index int) *DhwData {
 	// Extracting correct State.Dhw element
 	if len(state.State.Dhw) == 0 {
 		return nil
 	}
 	var dhwData DhwData
-	for _, stateDhw := range state.State.Dhw {
-		if stateDhw.Index == index || (stateDhw.Index == HOTWATERINDEX_DEFAULT && index < 0) {
-			dhwData.State = stateDhw
+	for _, el := range state.State.Dhw {
+		if el.Index == index || (el.Index == HOTWATERINDEX_DEFAULT && index < 0) {
+			dhwData.State = el
 			break
 		}
 	}
-	for _, propDhw := range state.Properties.Dhw {
-		if propDhw.Index == index || (propDhw.Index == HOTWATERINDEX_DEFAULT && index < 0) {
-			dhwData.Properties = propDhw
+	for _, el := range state.Properties.Dhw {
+		if el.Index == index || (el.Index == HOTWATERINDEX_DEFAULT && index < 0) {
+			dhwData.Properties = el
 			break
 		}
 	}
-	for _, confDhw := range state.Configuration.Dhw {
-		if confDhw.Index == index || (confDhw.Index == HOTWATERINDEX_DEFAULT && index < 0) {
-			dhwData.Configuration = confDhw
+	for _, el := range state.Configuration.Dhw {
+		if el.Index == index || (el.Index == HOTWATERINDEX_DEFAULT && index < 0) {
+			dhwData.Configuration = el
 			break
 		}
 	}
 	return &dhwData
 }
 
-func GetDomesticHotWaterData(state SystemStatus, index int) *DomesticHotWaterData {
+func GetDomesticHotWaterData(state *System, index int) *DomesticHotWaterData {
 	// Extracting correct State.DomesticHotWater element
 	if len(state.State.DomesticHotWater) == 0 {
 		return nil
 	}
 	var domesticHotWaterData DomesticHotWaterData
-	for _, stateDomesticHotWater := range state.State.DomesticHotWater {
-		if stateDomesticHotWater.Index == index || (stateDomesticHotWater.Index == HOTWATERINDEX_DEFAULT && index < 0) {
-			domesticHotWaterData.State = stateDomesticHotWater
+	for _, el := range state.State.DomesticHotWater {
+		if el.Index == index || (el.Index == HOTWATERINDEX_DEFAULT && index < 0) {
+			domesticHotWaterData.State = el
 			break
 		}
 	}
-	for _, propDomesticHotWater := range state.Properties.DomesticHotWater {
-		if propDomesticHotWater.Index == index || (propDomesticHotWater.Index == HOTWATERINDEX_DEFAULT && index < 0) {
-			domesticHotWaterData.Properties = propDomesticHotWater
+	for _, el := range state.Properties.DomesticHotWater {
+		if el.Index == index || (el.Index == HOTWATERINDEX_DEFAULT && index < 0) {
+			domesticHotWaterData.Properties = el
 			break
 		}
 	}
-	for _, confDomesticHotWater := range state.Configuration.DomesticHotWater {
-		if confDomesticHotWater.Index == index || (confDomesticHotWater.Index == HOTWATERINDEX_DEFAULT && index < 0) {
-			domesticHotWaterData.Configuration = confDomesticHotWater
+	for _, el := range state.Configuration.DomesticHotWater {
+		if el.Index == index || (el.Index == HOTWATERINDEX_DEFAULT && index < 0) {
+			domesticHotWaterData.Configuration = el
 			break
 		}
 	}
 	return &domesticHotWaterData
 }
 
-func GetZoneData(state SystemStatus, index int) *ZoneData {
+func GetZoneData(state *System, index int) *ZoneData {
 	// Extracting correct State.Zones element
 	if len(state.State.Zones) == 0 {
 		return nil
 	}
 	var zoneData ZoneData
-	for _, stateZone := range state.State.Zones {
-		if stateZone.Index == index || (stateZone.Index == ZONEINDEX_DEFAULT && index < 0) {
-			zoneData.State = stateZone
+	for _, el := range state.State.Zones {
+		if el.Index == index || (el.Index == ZONEINDEX_DEFAULT && index < 0) {
+			zoneData.State = el
 			break
 		}
 	}
-	for _, propZone := range state.Properties.Zones {
-		if propZone.Index == index || (propZone.Index == ZONEINDEX_DEFAULT && index < 0) {
-			zoneData.Properties = propZone
+	for _, el := range state.Properties.Zones {
+		if el.Index == index || (el.Index == ZONEINDEX_DEFAULT && index < 0) {
+			zoneData.Properties = el
 			break
 		}
 	}
-	for _, confZone := range state.Configuration.Zones {
-		if confZone.Index == index || (confZone.Index == ZONEINDEX_DEFAULT && index < 0) {
-			zoneData.Configuration = confZone
+	for _, el := range state.Configuration.Zones {
+		if el.Index == index || (el.Index == ZONEINDEX_DEFAULT && index < 0) {
+			zoneData.Configuration = el
 			break
 		}
 	}
