@@ -55,27 +55,13 @@ const (
 	RESOLUTION_MONTH = "MONTH"
 )
 
-type Logger interface {
-	Printf(msg string, arg ...any)
-}
-
 type CredentialsStruct struct {
 	User     string `json:"user"`
 	Password string `json:"password"`
 	Realm    string `json:"realm"`
 }
 
-type HeatingParStruct struct {
-	ZoneIndex    int
-	VetoSetpoint float32
-	VetoDuration float32
-}
-
-type HotwaterParStruct struct {
-	Index int
-}
-
-type Homes []struct {
+type Home struct {
 	HomeName string `json:"homeName"`
 	Address  struct {
 		Street      string `json:"street"`
@@ -108,7 +94,7 @@ type Homes []struct {
 	FirmwareVersion    string `json:"firmwareVersion"`
 }
 
-type SystemStatus struct {
+type System struct {
 	State struct {
 		System struct {
 			OutdoorTemperature           float64 `json:"outdoorTemperature"`
@@ -184,16 +170,16 @@ type ZoneData struct {
 	Configuration ConfigurationZone
 }
 
-type HomesAndSystems struct {
-	Homes   Homes
-	Systems []SystemAndId
-}
+// type HomesAndSystems struct {
+// 	Homes   Homes
+// 	Systems []SystemAndId
+// }
 
-type SystemAndId struct {
-	SystemId      string
-	SystemStatus  SystemStatus
-	SystemDevices SystemDevices
-}
+// type SystemAndId struct {
+// 	SystemId      string
+// 	SystemStatus  SystemStatus
+// 	SystemDevices SystemDevices
+// }
 
 type StateZone struct {
 	Index                                 int     `json:"index"`
@@ -383,7 +369,7 @@ type SystemDevices struct {
 	Gateway                 any      `json:"gateway"`
 }
 
-type DeviceAndInfo struct {
-	Device Device
-	Info   string
-}
+// type DeviceAndInfo struct {
+// 	Device Device
+// 	Info   string
+// }
