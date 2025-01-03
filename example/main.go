@@ -170,12 +170,17 @@ func main() {
 
 	fmt.Println("Third step: Generating new connection to be used for further calls of sensonet library")
 
-	var client *http.Client
-	client = NewClient()
+	var ctxclient *http.Client
+	// If http client logging is wanted, you have to prepare an http client with logging
+	if WITH_HTTP_CLIENT_LOGGING {
+		ctxclient = NewClientWithLog(log.New(os.Stderr, "client: ", log.Lshortfile))
+	} else {
+		ctxclient = NewClient()
+	}
 
 	// If you have user, password and realm, use Oauth2ConfigForRealm() and PasswordCredentialsToken() to get a token
-	ctx := context.WithValue(context.TODO(), oauth2.HTTPClient, client)
-	clientCtx := context.WithValue(ctx, oauth2.HTTPClient, client)
+	ctx := context.WithValue(context.TODO(), oauth2.HTTPClient, ctxclient)
+	clientCtx := context.WithValue(ctx, oauth2.HTTPClient, ctxclient)
 	oc := sensonet.Oauth2ConfigForRealm(credentials.Realm)
 	token, err = oc.PasswordCredentialsToken(clientCtx, credentials.User, credentials.Password)
 	if err != nil {
@@ -183,9 +188,11 @@ func main() {
 	}
 
 	// If http client logging is wanted, you have to prepare an http client with logging
+	var client *http.Client
 	if WITH_HTTP_CLIENT_LOGGING {
-		clientlogger := log.New(os.Stderr, "client: ", log.Lshortfile)
-		client = NewClientWithLog(clientlogger)
+		client = NewClientWithLog(log.New(os.Stderr, "client: ", log.Lshortfile))
+	} else {
+		client = NewClient()
 	}
 
 	// NewConnection() opens the connection to the myVaillant portal and returns a connection object for further function calls.
