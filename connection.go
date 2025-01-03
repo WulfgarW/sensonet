@@ -286,7 +286,7 @@ func (c *Connection) StopHotWaterBoost(systemId string, hotwaterIndex int) error
 
 func (c *Connection) StartStrategybased(systemId string, strategy int, heatingPar *HeatingParStruct, hotwaterPar *HotwaterParStruct) (string, error) {
 	if c.cacheDisabled {
-		return "", fmt.Errorf("function yet not implemented for disabled cache")
+		return "", fmt.Errorf("Function StartStrategybased() not supported if option disableCache active")
 	} else {
 		c.cacheController.homesAndSystemsCache.Reset()
 		state, err := c.GetSystem(systemId)
@@ -352,7 +352,7 @@ func (c *Connection) StartStrategybased(systemId string, strategy int, heatingPa
 
 func (c *Connection) StopStrategybased(systemId string, heatingPar *HeatingParStruct, hotwaterPar *HotwaterParStruct) (string, error) {
 	if c.cacheDisabled {
-		return "", fmt.Errorf("function yet not implemented for disabled cache")
+		return "", fmt.Errorf("Function StopStrategybased() not supported if option disableCache active")
 	} else {
 		c.cacheController.homesAndSystemsCache.Reset()
 		state, err := c.GetSystem(systemId)
@@ -455,7 +455,7 @@ func (c *Connection) WhichQuickMode(dhwData *DhwData, zoneData *ZoneData, strate
 func (c *Connection) GetDeviceData(systemid string, whichDevices int) ([]DeviceAndInfo, error) {
 	var devices []DeviceAndInfo
 	if c.cacheDisabled {
-		return devices, fmt.Errorf("function yet not implemented for disabled cache")
+		return devices, fmt.Errorf("Function GetDeviceData() not supported if option disableCache active")
 	} else {
 		systemDevices, err := c.getSystemDevices(systemid)
 		if err != nil {
