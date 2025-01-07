@@ -18,12 +18,11 @@ const (
 const (
 	HOTWATERBOOST_URL = "/systems/%s/tli/domestic-hot-water/%01d/boost"
 	ZONEQUICKVETO_URL = "/systems/%s/tli/zones/%01d/quick-veto"
+	SYSTEMS_URL       = "/systems/%s/tli"
 	DEVICES_URL       = "/emf/v2/%s/currentSystem"
 	ENERGY_URL        = "/emf/v2/%s/devices/%s/buckets?"
+	MPC_URL           = "/hem/%s/mpc"
 
-	// SYSTEM_URL     = "/systemcontrol/tli/v1"
-	// FACILITIES_URL = "not to be used"
-	// LIVEREPORT_URL = "/livereport/v1"
 	HOTWATERINDEX_DEFAULT                = 255
 	ZONEINDEX_DEFAULT                    = 0
 	ZONEVETOSETPOINT_DEFAULT             = 20.0
@@ -184,15 +183,13 @@ type ZoneData struct {
 	Configuration ConfigurationZone
 }
 
-type HomesAndSystems struct {
-	Homes   Homes
-	Systems []SystemAndId
+type SystemAndStatus struct {
+	SystemId     string
+	SystemStatus SystemStatus
 }
 
-type SystemAndId struct {
-	SystemId      string
-	SystemStatus  SystemStatus
-	SystemDevices SystemDevices
+type AllSystems struct {
+	SystemsAndStatus []SystemAndStatus
 }
 
 type StateZone struct {
@@ -386,4 +383,13 @@ type SystemDevices struct {
 type DeviceAndInfo struct {
 	Device Device
 	Info   string
+}
+
+type SystemDevicesAndSystemId struct {
+	SystemId      string
+	SystemDevices SystemDevices
+}
+
+type AllSystemDevices struct {
+	SystemDevicesAndSystemId []SystemDevicesAndSystemId
 }

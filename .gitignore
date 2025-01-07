@@ -6,3 +6,6 @@ __debug_bin*
 *.py
 *.log
 *.json
+*.exe
+*.zip
+example

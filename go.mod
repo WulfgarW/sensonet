@@ -5,10 +5,10 @@ go 1.23.3
 require (
 	github.com/asaskevich/EventBus v0.0.0-20200907212545-49d423059eef
 	github.com/benbjohnson/clock v1.3.5
-	github.com/coreos/go-oidc/v3 v3.11.0
+	github.com/coreos/go-oidc/v3 v3.12.0
 	github.com/eiannone/keyboard v0.0.0-20220611211555-0d226195f203
 	github.com/ernesto-jimenez/httplogger v0.0.0-20220128121225-117514c3f345
-	golang.org/x/oauth2 v0.24.0
+	golang.org/x/oauth2 v0.25.0
 )
 
 require (

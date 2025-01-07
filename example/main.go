@@ -21,8 +21,8 @@ const CREDENTIALS_FILE = ".sensonet-credentials.json"
 const WITH_SENSONET_LOGGING = true    // Set this to false if you want no sensonet logging
 const WITH_HTTP_CLIENT_LOGGING = true // Set this to false if you want no http client logging in the sensonet library
 
-// Timeout is the default request timeout used by the Helper
-var Timeout = 30 * time.Second // Fetching energy data can take some time
+// Timeout is the default request timeout used by the http client
+var Timeout = 45 * time.Second // Fetching energy data can take some time
 
 func readCredentials(filename string) (*sensonet.CredentialsStruct, error) {
 	b, err := os.ReadFile(filename)
@@ -72,6 +72,7 @@ func printKeyBinding() {
 	fmt.Println("   7 = Stop hotwater boost")
 	fmt.Println("   8 = Stop zone quick veto")
 	fmt.Println("   9 = Stop strategy based quick mode")
+	fmt.Println("   0 = Read mpc data")
 	fmt.Println("   h = Show key bindings")
 	fmt.Println("   q = Quit")
 	fmt.Println("#############################################")
@@ -210,13 +211,19 @@ func main() {
 		logger.Fatal(err)
 	}
 
+	// NewController() initialises a controller that caches data read from the myVaillant portal and provides functions to control the heat pump system.
+	ctrl, err := sensonet.NewController(conn)
+	if err != nil {
+		logger.Fatal(err)
+	}
+
 	// Store the current token in a file for future calls of this program
 	if err := writeToken(TOKEN_FILE, token); err != nil {
 		logger.Fatal(err)
 	}
 
 	fmt.Println("Fourth step: Reading Homes() structure from myVaillant portal")
-	homes, err := conn.GetHomes()
+	homes, err := ctrl.GetHomes()
 	if err != nil {
 		logger.Fatal(err)
 	}
@@ -245,17 +252,17 @@ func main() {
 			switch {
 			case i == rune('1'):
 				fmt.Println("Getting device data")
-				devices, err := conn.GetDeviceData(systemID, sensonet.DEVICES_ALL)
+				devices, err := ctrl.GetDeviceData(systemID, sensonet.DEVICES_ALL)
 				if err != nil {
 					logger.Println(err)
 				}
 				fmt.Printf("   Got %d devices\n ", len(devices))
 				fmt.Println("Reading energy data")
-				startDate, _ := time.Parse("2006-01-02 15:04:05MST", "2024-12-01 00:00:00CET")
-				endDate, _ := time.Parse("2006-01-02 15:04:05MST", "2024-12-20 23:59:59CET")
+				startDate, _ := time.Parse("2006-01-02 15:04:05MST", "2025-01-01 00:00:00CET")
+				endDate, _ := time.Parse("2006-01-02 15:04:05MST", "2025-01-05 23:59:59CET")
 				for _, dev := range devices {
 					for _, data := range dev.Device.Data {
-						energyData, err := conn.GetEnergyData(systemID, dev.Device.DeviceUUID, data.OperationMode, data.ValueType, sensonet.RESOLUTION_DAY,
+						energyData, err := ctrl.GetEnergyData(systemID, dev.Device.DeviceUUID, data.OperationMode, data.ValueType, sensonet.RESOLUTION_DAY,
 							startDate, endDate)
 						if err != nil {
 							logger.Println(err)
@@ -269,19 +276,19 @@ func main() {
 				}
 			case i == rune('4'):
 				fmt.Println("Starting hotwater boost")
-				err = conn.StartHotWaterBoost(systemID, -1)
+				err = ctrl.StartHotWaterBoost(systemID, -1)
 				if err != nil {
 					logger.Println(err)
 				}
 			case i == rune('5'):
 				fmt.Println("Starting zone quick veto")
-				err = conn.StartZoneQuickVeto(systemID, 0, 18.0, 0.5)
+				err = ctrl.StartZoneQuickVeto(systemID, 0, 18.0, 0.5)
 				if err != nil {
 					logger.Println(err)
 				}
 			case i == rune('6'):
 				fmt.Println("Starting strategy based session")
-				result, err := conn.StartStrategybased(systemID, sensonet.STRATEGY_HOTWATER_THEN_HEATING, &heatingPar, &hotwaterPar)
+				result, err := ctrl.StartStrategybased(systemID, sensonet.STRATEGY_HOTWATER_THEN_HEATING, &heatingPar, &hotwaterPar)
 				if err != nil {
 					logger.Println(err)
 				} else {
@@ -289,23 +296,31 @@ func main() {
 				}
 			case i == rune('7'):
 				fmt.Println("Stopping hotwater boost")
-				err = conn.StopHotWaterBoost(systemID, -1)
+				err = ctrl.StopHotWaterBoost(systemID, -1)
 				if err != nil {
 					logger.Println(err)
 				}
 			case i == rune('8'):
 				fmt.Println("Stopping zone quick veto")
-				err = conn.StopZoneQuickVeto(systemID, 0)
+				err = ctrl.StopZoneQuickVeto(systemID, 0)
 				if err != nil {
 					logger.Println(err)
 				}
 			case i == rune('9'):
 				fmt.Println("Stopping strategy based session")
-				result, err := conn.StopStrategybased(systemID, &heatingPar, &hotwaterPar)
+				result, err := ctrl.StopStrategybased(systemID, &heatingPar, &hotwaterPar)
 				if err != nil {
 					logger.Println(err)
 				} else {
 					fmt.Printf("result of function StopStrategybased()=\"%s\"\n", result)
+				}
+			case i == rune('0'):
+				fmt.Println("Getting mpc data")
+				result, err := conn.GetMpcData(systemID)
+				if err != nil {
+					logger.Println(err)
+				} else {
+					fmt.Printf("result of function GetMpcData()=\"%s\"\n", result)
 				}
 			case i == rune('h'):
 				printKeyBinding()
@@ -318,7 +333,7 @@ func main() {
 		default:
 			// No key pressed. Print some information every 30 seconds
 			if time.Now().After(lastPrint.Add(30 * time.Second)) {
-				state, err := conn.GetSystem(systemID)
+				state, err := ctrl.GetSystem(systemID)
 				if err != nil {
 					logger.Fatal(err)
 				}
@@ -337,7 +352,7 @@ func main() {
 				}
 				dhwData := sensonet.GetDhwData(state, -1)
 				zoneData := sensonet.GetZoneData(state, heatingPar.ZoneIndex)
-				fmt.Printf("   Quickmodes: internal: \"%s\"  heat pump: Dhw: \"%s\"  Zone: \"%s\"\n", conn.GetCurrentQuickMode(), dhwData.State.CurrentSpecialFunction, zoneData.State.CurrentSpecialFunction)
+				fmt.Printf("   Quickmodes: internal: \"%s\"  heat pump: Dhw: \"%s\"  Zone: \"%s\"\n", ctrl.GetCurrentQuickMode(), dhwData.State.CurrentSpecialFunction, zoneData.State.CurrentSpecialFunction)
 				fmt.Println("---------------------------------------------------------------------------------------------------------------------")
 				lastPrint = time.Now()
 
