@@ -33,11 +33,11 @@ func NewController(conn *Connection) (*Controller, error) {
 		//var res Homes
 		res, err := ctrl.conn.GetHomes()
 		return res, err
-	}, CACHE_DURATION_HOMES)
+	}, CACHE_DURATION_HOMES*time.Second)
 
 	ctrl.systemsCache = ResettableCached(func() (AllSystems, error) {
 		var res AllSystems
-		homes, err := ctrl.conn.GetHomes()
+		homes, err := ctrl.homesCache.Get()
 		for i, home := range homes {
 			var systemAndStatus SystemAndStatus
 			systemAndStatus.SystemId = home.SystemID
@@ -53,11 +53,11 @@ func NewController(conn *Connection) (*Controller, error) {
 			}
 		}
 		return res, err
-	}, CACHE_DURATION_SYSTEMS)
+	}, CACHE_DURATION_SYSTEMS*time.Second)
 
 	ctrl.systemDevicesCache = ResettableCached(func() (AllSystemDevices, error) {
 		var res AllSystemDevices
-		homes, err := ctrl.conn.GetHomes()
+		homes, err := ctrl.homesCache.Get()
 		for i, home := range homes {
 			var systemDevicesAndSystemId SystemDevicesAndSystemId
 			systemDevicesAndSystemId.SystemId = home.SystemID
@@ -69,7 +69,7 @@ func NewController(conn *Connection) (*Controller, error) {
 			}
 		}
 		return res, err
-	}, CACHE_DURATION_DEVICES)
+	}, CACHE_DURATION_DEVICES*time.Second)
 
 	/*ctrl.systemMpcDataCache = ResettableCached(func() (AllSystemMpcData, error) {
 		var res AllSystemMpcData
