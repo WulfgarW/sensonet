@@ -84,7 +84,7 @@ func NewController(conn *Connection, opts ...CtrlOption) (*Controller, error) {
 
 	ctrl.systemMpcDataCache = ResettableCached(func() (AllSystemMpcData, error) {
 		var res AllSystemMpcData
-		homes, err := ctrl.conn.GetHomes()
+		homes, err := ctrl.homesCache.Get()
 		for i, home := range homes {
 			var systemMpcData SystemMpcData
 			systemMpcData.SystemId = home.SystemID
@@ -99,7 +99,7 @@ func NewController(conn *Connection, opts ...CtrlOption) (*Controller, error) {
 			}
 		}
 		return res, err
-	}, CACHE_DURATION_MPCDATA)
+	}, CACHE_DURATION_MPCDATA*time.Second)
 
 	return ctrl, nil
 }
