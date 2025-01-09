@@ -7,13 +7,14 @@ import (
 
 type Controller struct {
 	conn               *Connection
+	logger             Logger
 	homesCache         Cacheable[Homes]
 	systemsCache       Cacheable[AllSystems]
 	systemDevicesCache Cacheable[AllSystemDevices]
-	//	systemMpcDataCache Cacheable[AllSystemMpcData]
-	currentQuickmode string
-	quickmodeStarted time.Time
-	quickmodeStopped time.Time
+	systemMpcDataCache Cacheable[AllSystemMpcData]
+	currentQuickmode   string
+	quickmodeStarted   time.Time
+	quickmodeStopped   time.Time
 }
 
 const CACHE_DURATION_HOMES = 1800
@@ -22,11 +23,15 @@ const CACHE_DURATION_DEVICES = 1800
 const CACHE_DURATION_MPCDATA = 90
 
 // NewController creates a new Sensonet controller.
-func NewController(conn *Connection) (*Controller, error) {
+func NewController(conn *Connection, opts ...CtrlOption) (*Controller, error) {
 	ctrl := &Controller{
 		conn:             conn,
 		quickmodeStarted: time.Now(),
 		quickmodeStopped: time.Now().Add(-2 * time.Minute), // time stamp is set in the past so that first call of refreshCurrentQuickMode() changes currentQuickmode if necessary
+	}
+
+	for _, opt := range opts {
+		opt(ctrl)
 	}
 
 	ctrl.homesCache = ResettableCached(func() (Homes, error) {
@@ -42,6 +47,9 @@ func NewController(conn *Connection) (*Controller, error) {
 			var systemAndStatus SystemAndStatus
 			systemAndStatus.SystemId = home.SystemID
 			systemAndStatus.SystemStatus, err = ctrl.conn.GetSystem(home.SystemID)
+			if err != nil {
+				return res, err
+			}
 			if len(res.SystemsAndStatus) <= i {
 				res.SystemsAndStatus = append(res.SystemsAndStatus, systemAndStatus)
 			} else {
@@ -61,7 +69,10 @@ func NewController(conn *Connection) (*Controller, error) {
 		for i, home := range homes {
 			var systemDevicesAndSystemId SystemDevicesAndSystemId
 			systemDevicesAndSystemId.SystemId = home.SystemID
-			systemDevicesAndSystemId.SystemDevices, err = ctrl.conn.getSystemDevices(home.SystemID)
+			systemDevicesAndSystemId.SystemDevices, err = ctrl.conn.GetSystemDevices(home.SystemID)
+			if err != nil {
+				return res, err
+			}
 			if len(res.SystemDevicesAndSystemId) <= i {
 				res.SystemDevicesAndSystemId = append(res.SystemDevicesAndSystemId, systemDevicesAndSystemId)
 			} else {
@@ -71,21 +82,31 @@ func NewController(conn *Connection) (*Controller, error) {
 		return res, err
 	}, CACHE_DURATION_DEVICES*time.Second)
 
-	/*ctrl.systemMpcDataCache = ResettableCached(func() (AllSystemMpcData, error) {
+	ctrl.systemMpcDataCache = ResettableCached(func() (AllSystemMpcData, error) {
 		var res AllSystemMpcData
 		homes, err := ctrl.conn.GetHomes()
 		for i, home := range homes {
-			???
+			var systemMpcData SystemMpcData
+			systemMpcData.SystemId = home.SystemID
+			systemMpcData.MpcData, err = ctrl.conn.GetMpcData(home.SystemID)
+			if err != nil {
+				return res, err
+			}
+			if len(res.SystemMpcData) <= i {
+				res.SystemMpcData = append(res.SystemMpcData, systemMpcData)
+			} else {
+				res.SystemMpcData[i] = systemMpcData
+			}
 		}
 		return res, err
-	}, CACHE_DURATION_MPCDATA)*/
+	}, CACHE_DURATION_MPCDATA)
 
 	return ctrl, nil
 }
 
 func (c *Controller) debug(fmt string, arg ...any) {
-	if c.conn.logger != nil {
-		c.conn.logger.Printf(fmt, arg...)
+	if c.logger != nil {
+		c.logger.Printf(fmt, arg...)
 	}
 }
 
@@ -93,7 +114,7 @@ func (c *Controller) debug(fmt string, arg ...any) {
 func (c *Controller) GetHomes() (Homes, error) {
 	homes, err := c.homesCache.Get()
 	if err != nil {
-		return nil, fmt.Errorf("error getting homes: %w", err)
+		return nil, err
 	}
 	if len(homes) < 1 {
 		return nil, fmt.Errorf("error: no homes")
@@ -106,7 +127,7 @@ func (c *Controller) GetSystem(systemId string) (SystemStatus, error) {
 	var systemStatus SystemStatus
 	systems, err := c.systemsCache.Get()
 	if err != nil {
-		return systemStatus, fmt.Errorf("error getting sytem: %w", err)
+		return systemStatus, err
 	}
 	for _, sys := range systems.SystemsAndStatus {
 		if sys.SystemId == systemId {
@@ -117,11 +138,11 @@ func (c *Controller) GetSystem(systemId string) (SystemStatus, error) {
 }
 
 // Returns the device data for given criteria
-func (c *Controller) GetDeviceData(systemid string, whichDevices int) ([]DeviceAndInfo, error) {
+func (c *Controller) GetDeviceData(systemId string, whichDevices int) ([]DeviceAndInfo, error) {
 	var devices []DeviceAndInfo
-	systemDevices, err := c.getSystemDevices(systemid)
+	systemDevices, err := c.GetSystemDevices(systemId)
 	if err != nil {
-		return devices, fmt.Errorf("error getting sytem devices for %s: %w", systemid, err)
+		return devices, err
 	}
 	var deviceAndInfo DeviceAndInfo
 	if systemDevices.PrimaryHeatGenerator.DeviceUUID != "" && (whichDevices == DEVICES_PRIMARY_HEATER || whichDevices == DEVICES_ALL) {
@@ -150,11 +171,77 @@ func (c *Controller) GetEnergyData(systemId, deviceUuid, operationMode, energyTy
 	return c.conn.GetEnergyData(systemId, deviceUuid, operationMode, energyType, resolution, startDate, endDate)
 }
 
-/*
 // Returns the mpc data for systemId
-func (c *Controller) GetMpcData(systemid string) (string, error) {
+func (c *Controller) GetMpcData(systemId string) (MpcData, error) {
+	var mpcData MpcData
+	allSystemMpcData, err := c.systemMpcDataCache.Get()
+	if err != nil {
+		return mpcData, err
+	}
+	for _, systemMpcData := range allSystemMpcData.SystemMpcData {
+		if systemMpcData.SystemId == systemId {
+			return systemMpcData.MpcData, err
+		}
+	}
+	return mpcData, fmt.Errorf("no mpc data found for system %s", systemId)
 }
-*/
+
+// Returns the system devices for a specific systemId
+func (c *Controller) GetSystemDevices(systemId string) (SystemDevices, error) {
+	var systemDevices SystemDevices
+	allSystemDevices, err := c.systemDevicesCache.Get()
+	if err != nil {
+		return systemDevices, err
+	}
+	for _, sys := range allSystemDevices.SystemDevicesAndSystemId {
+		if sys.SystemId == systemId {
+			return sys.SystemDevices, nil
+		}
+	}
+	return systemDevices, fmt.Errorf("no data found for system %s", systemId)
+}
+
+// Returns the current power consumption for systemId
+func (c *Controller) SystemCurrentPower(systemId string) (float64, error) {
+	mpcData, err := c.GetMpcData(systemId)
+	if err != nil || len(mpcData.Devices) < 1 {
+		return -1.0, err
+	}
+	totalPower := 0.0
+	for _, dev := range mpcData.Devices {
+		totalPower = totalPower + dev.CurrentPower
+	}
+	return totalPower, nil
+}
+
+// Returns the current power consumption and product name for deviceUuid. If "All" is given as deviceUuid, then the function return the power consumption and product name for all devices of systemId
+func (c *Controller) DeviceCurrentPower(systemId, deviceUuid string) (DevicePowerMap, error) {
+	devicePowerMap := make(DevicePowerMap)
+	if deviceUuid == "All" {
+		devicePowerMap["All"] = DevicePower{CurrentPower: -1.0, ProductName: "All Devices"}
+	}
+	mpcData, err := c.GetMpcData(systemId)
+	if err != nil || len(mpcData.Devices) < 1 {
+		return devicePowerMap, err
+	}
+	devices, err := c.GetDeviceData(systemId, DEVICES_ALL)
+	if err != nil {
+		return devicePowerMap, err
+	}
+	totalPower := 0.0
+	for _, dev := range mpcData.Devices {
+		totalPower = totalPower + dev.CurrentPower
+		if dev.DeviceID == deviceUuid || deviceUuid == "All" {
+			for _, dev2 := range devices {
+				if dev.DeviceID == dev2.Device.DeviceUUID {
+					devicePowerMap[deviceUuid] = DevicePower{CurrentPower: dev.CurrentPower, ProductName: dev2.Device.ProductName}
+				}
+			}
+		}
+	}
+	devicePowerMap["All"] = DevicePower{CurrentPower: totalPower, ProductName: "All Devices"}
+	return devicePowerMap, nil
+}
 
 func (c *Controller) GetCurrentQuickMode() string {
 	return c.currentQuickmode
@@ -190,21 +277,6 @@ func (c *Controller) refreshCurrentQuickMode(state *SystemStatus) {
 			c.quickmodeStarted = time.Now()
 		}
 	}
-}
-
-// Returns the system devices for a specific systemId
-func (c *Controller) getSystemDevices(systemId string) (SystemDevices, error) {
-	var systemDevices SystemDevices
-	allSystemDevices, err := c.systemDevicesCache.Get()
-	if err != nil {
-		return systemDevices, fmt.Errorf("error getting sytem: %w", err)
-	}
-	for _, sys := range allSystemDevices.SystemDevicesAndSystemId {
-		if sys.SystemId == systemId {
-			return sys.SystemDevices, nil
-		}
-	}
-	return systemDevices, fmt.Errorf("no data found for system %s", systemId)
 }
 
 func (c *Controller) StartZoneQuickVeto(systemId string, zone int, setpoint float32, duration float32) error {
@@ -249,7 +321,7 @@ func (c *Controller) StartStrategybased(systemId string, strategy int, heatingPa
 	c.systemsCache.Reset()
 	state, err := c.GetSystem(systemId)
 	if err != nil {
-		return "", fmt.Errorf("could not read homes and systems cache: %w", err)
+		return "", err
 	}
 	c.refreshCurrentQuickMode(&state)
 	// Extracting correct State.Dhw element
@@ -311,7 +383,7 @@ func (c *Controller) StopStrategybased(systemId string, heatingPar *HeatingParSt
 	c.systemsCache.Reset()
 	state, err := c.GetSystem(systemId)
 	if err != nil {
-		return "", fmt.Errorf("could not read system state: %w", err)
+		return "", err
 	}
 	c.refreshCurrentQuickMode(&state)
 	// Extracting correct State.Dhw element

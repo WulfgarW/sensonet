@@ -15,11 +15,10 @@ import (
 // Connection is the Sensonet connection
 type Connection struct {
 	client *http.Client
-	logger Logger
 }
 
 // NewConnection creates a new Sensonet device connection.
-func NewConnection(ts oauth2.TokenSource, opts ...Option) (*Connection, error) {
+func NewConnection(ts oauth2.TokenSource, opts ...ConnOption) (*Connection, error) {
 	conn := &Connection{
 		client: new(http.Client),
 	}
@@ -36,12 +35,6 @@ func NewConnection(ts oauth2.TokenSource, opts ...Option) (*Connection, error) {
 	}
 
 	return conn, nil
-}
-
-func (conn *Connection) debug(fmt string, arg ...any) {
-	if conn.logger != nil {
-		conn.logger.Printf(fmt, arg...)
-	}
 }
 
 // Returns all "homes" that belong to the current user under the myVaillant portal
@@ -63,7 +56,7 @@ func (c *Connection) GetSystem(systemId string) (SystemStatus, error) {
 }
 
 // Returns the system devices for a specific systemId
-func (c *Connection) getSystemDevices(systemId string) (SystemDevices, error) {
+func (c *Connection) GetSystemDevices(systemId string) (SystemDevices, error) {
 	var systemDevices SystemDevices
 	url := API_URL_BASE + fmt.Sprintf(DEVICES_URL, systemId)
 	req, _ := http.NewRequest("GET", url, nil)
@@ -91,9 +84,8 @@ func (c *Connection) StartZoneQuickVeto(systemId string, zone int, setpoint floa
 	req.Header.Set("Content-Type", "application/json")
 
 	if _, err := doBody(c.client, req); err != nil {
-		return fmt.Errorf("could not start quick veto: %w", err)
+		return err
 	}
-
 	return nil
 }
 
@@ -106,9 +98,8 @@ func (c *Connection) StopZoneQuickVeto(systemId string, zone int) error {
 	req, _ := http.NewRequest("DELETE", url, nil)
 
 	if _, err := doBody(c.client, req); err != nil {
-		return fmt.Errorf("could not stop quick veto: %w", err)
+		return err
 	}
-
 	return nil
 }
 
@@ -122,9 +113,8 @@ func (c *Connection) StartHotWaterBoost(systemId string, hotwaterIndex int) erro
 	req.Header.Set("Content-Type", "application/json")
 
 	if _, err := doBody(c.client, req); err != nil {
-		return fmt.Errorf("could not start hotwater boost: %w", err)
+		return err
 	}
-
 	return nil
 }
 
@@ -137,18 +127,17 @@ func (c *Connection) StopHotWaterBoost(systemId string, hotwaterIndex int) error
 	req, _ := http.NewRequest("DELETE", url, nil)
 
 	if _, err := doBody(c.client, req); err != nil {
-		return fmt.Errorf("could not stop hotwater boost: %w", err)
+		return err
 	}
-
 	return nil
 }
 
 // Returns the device data for given criteria
-func (c *Connection) GetDeviceData(systemid string, whichDevices int) ([]DeviceAndInfo, error) {
+func (c *Connection) GetDeviceData(systemId string, whichDevices int) ([]DeviceAndInfo, error) {
 	var devices []DeviceAndInfo
-	systemDevices, err := c.getSystemDevices(systemid)
+	systemDevices, err := c.GetSystemDevices(systemId)
 	if err != nil {
-		return devices, fmt.Errorf("error getting sytem devices for %s: %w", systemid, err)
+		return devices, err
 	}
 	var deviceAndInfo DeviceAndInfo
 	if systemDevices.PrimaryHeatGenerator.DeviceUUID != "" && (whichDevices == DEVICES_PRIMARY_HEATER || whichDevices == DEVICES_ALL) {
@@ -173,7 +162,7 @@ func (c *Connection) GetDeviceData(systemid string, whichDevices int) ([]DeviceA
 }
 
 // Returns the energy data for systemId, deviceUuid and other given criteria
-func (c *Connection) GetEnergyData(systemid, deviceUuid, operationMode, energyType, resolution string, startDate, endDate time.Time) (EnergyData, error) {
+func (c *Connection) GetEnergyData(systemId, deviceUuid, operationMode, energyType, resolution string, startDate, endDate time.Time) (EnergyData, error) {
 	var energyData EnergyData
 	v := url.Values{
 		"resolution":    {resolution},
@@ -183,26 +172,64 @@ func (c *Connection) GetEnergyData(systemid, deviceUuid, operationMode, energyTy
 		"endDate":       {endDate.Format("2006-01-02T15:04:05-07:00")},
 	}
 
-	url := API_URL_BASE + fmt.Sprintf(ENERGY_URL, systemid, deviceUuid) + v.Encode()
+	url := API_URL_BASE + fmt.Sprintf(ENERGY_URL, systemId, deviceUuid) + v.Encode()
 	req, _ := http.NewRequest("GET", url, nil)
 	if err := doJSON(c.client, req, &energyData); err != nil {
-		return energyData, fmt.Errorf("error getting energy data for %s: %w", deviceUuid, err)
+		return energyData, err
 	}
 	return energyData, nil
 }
 
 // Returns the mpc data for systemId
-// (still work in progress)
-func (c *Connection) GetMpcData(systemid string) (string, error) {
-	//var energyData EnergyData
-	var body []byte
-	var err error
+func (c *Connection) GetMpcData(systemId string) (MpcData, error) {
+	var mpcData MpcData
 
-	url := API_URL_BASE + fmt.Sprintf(MPC_URL, systemid)
+	url := API_URL_BASE + fmt.Sprintf(MPC_URL, systemId)
 	req, _ := http.NewRequest("GET", url, nil)
-	if body, err = doBody(c.client, req); err != nil {
-		return fmt.Sprint(body), fmt.Errorf("error getting mpc data for %s: %w", systemid, err)
+	if err := doJSON(c.client, req, &mpcData); err != nil {
+		return mpcData, err
 	}
-	c.debug(fmt.Sprintf("mpc data:%s", body))
-	return fmt.Sprint(body), nil
+	return mpcData, nil
+}
+
+// Returns the current power consumption for systemId
+func (c *Connection) SystemCurrentPower(systemId string) (float64, error) {
+	mpcData, err := c.GetMpcData(systemId)
+	if err != nil || len(mpcData.Devices) < 1 {
+		return -1.0, err
+	}
+	totalPower := 0.0
+	for _, dev := range mpcData.Devices {
+		totalPower = totalPower + dev.CurrentPower
+	}
+	return totalPower, nil
+}
+
+// Returns the current power consumption and product name for deviceUuid. If "All" is given as deviceUuid, then the function return the power consumption and product name for all devices of systemId
+func (c *Connection) DeviceCurrentPower(systemId, deviceUuid string) (DevicePowerMap, error) {
+	devicePowerMap := make(DevicePowerMap)
+	if deviceUuid == "All" {
+		devicePowerMap["All"] = DevicePower{CurrentPower: -1.0, ProductName: "All Devices"}
+	}
+	mpcData, err := c.GetMpcData(systemId)
+	if err != nil || len(mpcData.Devices) < 1 {
+		return devicePowerMap, err
+	}
+	devices, err := c.GetDeviceData(systemId, DEVICES_ALL)
+	if err != nil {
+		return devicePowerMap, err
+	}
+	totalPower := 0.0
+	for _, dev := range mpcData.Devices {
+		totalPower = totalPower + dev.CurrentPower
+		if dev.DeviceID == deviceUuid || deviceUuid == "All" {
+			for _, dev2 := range devices {
+				if dev.DeviceID == dev2.Device.DeviceUUID {
+					devicePowerMap[deviceUuid] = DevicePower{CurrentPower: dev.CurrentPower, ProductName: dev2.Device.ProductName}
+				}
+			}
+		}
+	}
+	devicePowerMap["All"] = DevicePower{CurrentPower: totalPower, ProductName: "All Devices"}
+	return devicePowerMap, nil
 }

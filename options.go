@@ -2,16 +2,18 @@ package sensonet
 
 import "net/http"
 
-type Option func(*Connection)
+type ConnOption func(*Connection)
 
-func WithLogger(logger Logger) Option {
+func WithHttpClient(client *http.Client) ConnOption {
 	return func(c *Connection) {
-		c.logger = logger
+		c.client = client
 	}
 }
 
-func WithHttpClient(client *http.Client) Option {
-	return func(c *Connection) {
-		c.client = client
+type CtrlOption func(*Controller)
+
+func WithLogger(logger Logger) CtrlOption {
+	return func(c *Controller) {
+		c.logger = logger
 	}
 }

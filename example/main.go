@@ -1,5 +1,9 @@
 package main
 
+// This is an example program to demonstrate the usage of the package.
+// As it is recommended to usage the controller (initiated by NewController()) and its methods, this example program does not demonstrate the methods
+// of the connection object.
+
 import (
 	"context"
 	"encoding/json"
@@ -16,6 +20,7 @@ import (
 	"golang.org/x/oauth2"
 )
 
+const LOG_FILE = "sensonet.log"
 const TOKEN_FILE = ".sensonet-token.json"
 const CREDENTIALS_FILE = ".sensonet-credentials.json"
 const WITH_SENSONET_LOGGING = true    // Set this to false if you want no sensonet logging
@@ -133,8 +138,8 @@ type SLogger struct {
 	logger *log.Logger
 }
 
-func NewSLogLogger() *SLogger {
-	logger := log.New(os.Stderr, "sensonetlogger: ", log.Lshortfile)
+func NewSLogLogger(logFile *os.File) *SLogger {
+	logger := log.New(logFile, "sensonetlogger: ", log.Lshortfile)
 	return &SLogger{logger: logger}
 }
 
@@ -144,8 +149,20 @@ func (l *SLogger) Printf(msg string, arg ...any) {
 
 // Main program
 func main() {
+	var logFile *os.File
+	var err error
+	if LOG_FILE != "" {
+		logFile, err = os.OpenFile(LOG_FILE, os.O_CREATE|os.O_WRONLY, 0666)
+		if err != nil {
+			fmt.Println("Error opening log file. Err %w", err)
+			os.Exit(1)
+		}
+	} else {
+		logFile = os.Stderr
+	}
+
 	var (
-		logger = log.New(os.Stderr, "sensonet: ", log.Lshortfile)
+		logger = log.New(logFile, "sensonet: ", log.Lshortfile)
 	)
 
 	fmt.Println("Sample program to show how to use the sensonet library functions.")
@@ -166,7 +183,7 @@ func main() {
 	if err != nil {
 		logger.Println("readToken() ended unsuccessful. Probably no token file was found. Error:", err)
 	} else {
-		fmt.Println("Token read from file:", token)
+		logger.Println("Token read from file:", token)
 	}
 
 	fmt.Println("Third step: Generating new connection to be used for further calls of sensonet library")
@@ -185,34 +202,32 @@ func main() {
 
 	// If http client logging is wanted, you have to prepare an http client with logging
 	if WITH_HTTP_CLIENT_LOGGING {
-		clientlogger := log.New(os.Stderr, "client: ", log.Lshortfile)
+		clientlogger := log.New(logFile, "client: ", log.Lshortfile)
 		client = NewClientWithLog(clientlogger)
 	}
 
 	// NewConnection() opens the connection to the myVaillant portal and returns a connection object for further function calls.
-	// You can provide a logger and http client (especially one with logging) as optional parameters.
+	// You can provide an http client (especially one with logging) as optional parameter.
 	var conn *sensonet.Connection
-	if WITH_SENSONET_LOGGING {
-		// Implements a logger for the sensonet library
-		slogger := NewSLogLogger()
-		if WITH_HTTP_CLIENT_LOGGING {
-			conn, err = sensonet.NewConnection(oc.TokenSource(clientCtx, token), sensonet.WithLogger(slogger), sensonet.WithHttpClient(client))
-		} else {
-			conn, err = sensonet.NewConnection(oc.TokenSource(clientCtx, token), sensonet.WithLogger(slogger))
-		}
+	if WITH_HTTP_CLIENT_LOGGING {
+		conn, err = sensonet.NewConnection(oc.TokenSource(clientCtx, token), sensonet.WithHttpClient(client))
 	} else {
-		if WITH_HTTP_CLIENT_LOGGING {
-			conn, err = sensonet.NewConnection(oc.TokenSource(clientCtx, token), sensonet.WithHttpClient(client))
-		} else {
-			conn, err = sensonet.NewConnection(oc.TokenSource(clientCtx, token))
-		}
+		conn, err = sensonet.NewConnection(oc.TokenSource(clientCtx, token))
 	}
 	if err != nil {
 		logger.Fatal(err)
 	}
 
 	// NewController() initialises a controller that caches data read from the myVaillant portal and provides functions to control the heat pump system.
-	ctrl, err := sensonet.NewController(conn)
+	// You can provide a logger as optional parameter.
+	var ctrl *sensonet.Controller
+	if WITH_SENSONET_LOGGING {
+		// Implements a logger for the sensonet library
+		slogger := NewSLogLogger(logFile)
+		ctrl, err = sensonet.NewController(conn, sensonet.WithLogger(slogger))
+	} else {
+		ctrl, err = sensonet.NewController(conn)
+	}
 	if err != nil {
 		logger.Fatal(err)
 	}
@@ -220,6 +235,8 @@ func main() {
 	// Store the current token in a file for future calls of this program
 	if err := writeToken(TOKEN_FILE, token); err != nil {
 		logger.Fatal(err)
+	} else {
+		logger.Println("New Token written to file:", token)
 	}
 
 	fmt.Println("Fourth step: Reading Homes() structure from myVaillant portal")
@@ -228,7 +245,7 @@ func main() {
 		logger.Fatal(err)
 	}
 	// We use the system ID of the first element (=index 0) of homes[]
-	systemID := homes[0].SystemID
+	systemId := homes[0].SystemID
 
 	var heatingPar sensonet.HeatingParStruct
 	var hotwaterPar sensonet.HotwaterParStruct
@@ -252,17 +269,17 @@ func main() {
 			switch {
 			case i == rune('1'):
 				fmt.Println("Getting device data")
-				devices, err := ctrl.GetDeviceData(systemID, sensonet.DEVICES_ALL)
+				devices, err := ctrl.GetDeviceData(systemId, sensonet.DEVICES_ALL)
 				if err != nil {
 					logger.Println(err)
 				}
 				fmt.Printf("   Got %d devices\n ", len(devices))
 				fmt.Println("Reading energy data")
 				startDate, _ := time.Parse("2006-01-02 15:04:05MST", "2025-01-01 00:00:00CET")
-				endDate, _ := time.Parse("2006-01-02 15:04:05MST", "2025-01-05 23:59:59CET")
+				endDate, _ := time.Parse("2006-01-02 15:04:05MST", "2025-01-10 23:59:59CET")
 				for _, dev := range devices {
 					for _, data := range dev.Device.Data {
-						energyData, err := ctrl.GetEnergyData(systemID, dev.Device.DeviceUUID, data.OperationMode, data.ValueType, sensonet.RESOLUTION_DAY,
+						energyData, err := ctrl.GetEnergyData(systemId, dev.Device.DeviceUUID, data.OperationMode, data.ValueType, sensonet.RESOLUTION_DAY,
 							startDate, endDate)
 						if err != nil {
 							logger.Println(err)
@@ -276,51 +293,75 @@ func main() {
 				}
 			case i == rune('4'):
 				fmt.Println("Starting hotwater boost")
-				err = ctrl.StartHotWaterBoost(systemID, -1)
+				err = ctrl.StartHotWaterBoost(systemId, -1)
 				if err != nil {
+					fmt.Println(" An error occurred. ", err)
 					logger.Println(err)
 				}
 			case i == rune('5'):
 				fmt.Println("Starting zone quick veto")
-				err = ctrl.StartZoneQuickVeto(systemID, 0, 18.0, 0.5)
+				err = ctrl.StartZoneQuickVeto(systemId, 0, 18.0, 0.5)
 				if err != nil {
+					fmt.Println(" An error occurred. ", err)
 					logger.Println(err)
 				}
 			case i == rune('6'):
 				fmt.Println("Starting strategy based session")
-				result, err := ctrl.StartStrategybased(systemID, sensonet.STRATEGY_HOTWATER_THEN_HEATING, &heatingPar, &hotwaterPar)
+				result, err := ctrl.StartStrategybased(systemId, sensonet.STRATEGY_HOTWATER_THEN_HEATING, &heatingPar, &hotwaterPar)
 				if err != nil {
+					fmt.Println(" An error occurred. ", err)
 					logger.Println(err)
 				} else {
 					fmt.Printf("result of function StartStrategybased()=\"%s\"\n", result)
 				}
 			case i == rune('7'):
 				fmt.Println("Stopping hotwater boost")
-				err = ctrl.StopHotWaterBoost(systemID, -1)
+				err = ctrl.StopHotWaterBoost(systemId, -1)
 				if err != nil {
+					fmt.Println(" An error occurred. ", err)
 					logger.Println(err)
 				}
 			case i == rune('8'):
 				fmt.Println("Stopping zone quick veto")
-				err = ctrl.StopZoneQuickVeto(systemID, 0)
+				err = ctrl.StopZoneQuickVeto(systemId, 0)
 				if err != nil {
+					fmt.Println(" An error occurred. ", err)
 					logger.Println(err)
 				}
 			case i == rune('9'):
 				fmt.Println("Stopping strategy based session")
-				result, err := ctrl.StopStrategybased(systemID, &heatingPar, &hotwaterPar)
+				result, err := ctrl.StopStrategybased(systemId, &heatingPar, &hotwaterPar)
 				if err != nil {
+					fmt.Println(" An error occurred. ", err)
 					logger.Println(err)
 				} else {
 					fmt.Printf("result of function StopStrategybased()=\"%s\"\n", result)
 				}
 			case i == rune('0'):
 				fmt.Println("Getting mpc data")
-				result, err := conn.GetMpcData(systemID)
+				result, err := ctrl.GetMpcData(systemId)
 				if err != nil {
+					fmt.Println(" An error occurred. ", err)
 					logger.Println(err)
 				} else {
-					fmt.Printf("result of function GetMpcData()=\"%s\"\n", result)
+					logger.Println("result of function GetMpcData()=", result)
+				}
+				systemCurrentPower, err := ctrl.SystemCurrentPower(systemId)
+				if err != nil {
+					fmt.Println(" An error occurred. ", err)
+					logger.Println(err)
+				} else {
+					fmt.Println("Current power consumption of system=", systemCurrentPower)
+				}
+				devicePowerMap, err := ctrl.DeviceCurrentPower(systemId, "All")
+				if err != nil {
+					fmt.Println(" An error occurred. ", err)
+					logger.Println(err)
+				} else {
+					fmt.Println("Current power consumption of all devices of the system:")
+					for _, el := range devicePowerMap {
+						fmt.Printf("   Device: %-35s Current power: %5.0fW \n", el.ProductName, el.CurrentPower)
+					}
 				}
 			case i == rune('h'):
 				printKeyBinding()
@@ -333,7 +374,7 @@ func main() {
 		default:
 			// No key pressed. Print some information every 30 seconds
 			if time.Now().After(lastPrint.Add(30 * time.Second)) {
-				state, err := ctrl.GetSystem(systemID)
+				state, err := ctrl.GetSystem(systemId)
 				if err != nil {
 					logger.Fatal(err)
 				}

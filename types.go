@@ -393,3 +393,26 @@ type SystemDevicesAndSystemId struct {
 type AllSystemDevices struct {
 	SystemDevicesAndSystemId []SystemDevicesAndSystemId
 }
+
+type MpcData struct {
+	Devices []struct {
+		DeviceID     string  `json:"deviceId"`
+		CurrentPower float64 `json:"currentPower"`
+	} `json:"devices"`
+}
+
+type SystemMpcData struct {
+	SystemId string
+	MpcData  MpcData
+}
+
+type AllSystemMpcData struct {
+	SystemMpcData []SystemMpcData
+}
+
+type DevicePower struct {
+	CurrentPower float64
+	ProductName  string
+}
+
+type DevicePowerMap map[string]DevicePower
