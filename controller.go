@@ -202,7 +202,7 @@ func (c *Controller) GetSystemDevices(systemId string) (SystemDevices, error) {
 }
 
 // Returns the current power consumption for systemId
-func (c *Controller) SystemCurrentPower(systemId string) (float64, error) {
+func (c *Controller) GetSystemCurrentPower(systemId string) (float64, error) {
 	mpcData, err := c.GetMpcData(systemId)
 	if err != nil || len(mpcData.Devices) < 1 {
 		return -1.0, err
@@ -215,7 +215,7 @@ func (c *Controller) SystemCurrentPower(systemId string) (float64, error) {
 }
 
 // Returns the current power consumption and product name for deviceUuid. If "All" is given as deviceUuid, then the function return the power consumption and product name for all devices of systemId
-func (c *Controller) DeviceCurrentPower(systemId, deviceUuid string) (DevicePowerMap, error) {
+func (c *Controller) GetDeviceCurrentPower(systemId, deviceUuid string) (DevicePowerMap, error) {
 	devicePowerMap := make(DevicePowerMap)
 	if deviceUuid == "All" {
 		devicePowerMap["All"] = DevicePower{CurrentPower: -1.0, ProductName: "All Devices"}
@@ -228,11 +228,14 @@ func (c *Controller) DeviceCurrentPower(systemId, deviceUuid string) (DevicePowe
 	if err != nil {
 		return devicePowerMap, err
 	}
+	c.debug("In DeviceCurrentPower: mpcData=", mpcData)
+	c.debug("In DeviceCurrentPower: devices=", devices)
 	totalPower := 0.0
 	for _, dev := range mpcData.Devices {
 		totalPower = totalPower + dev.CurrentPower
 		if dev.DeviceID == deviceUuid || deviceUuid == "All" {
 			for _, dev2 := range devices {
+				c.debug("In DeviceCurrentPower: dev.DeviceID=", dev.DeviceID, " DeviceUUID=", dev2.Device.DeviceUUID)
 				if dev.DeviceID == dev2.Device.DeviceUUID {
 					devicePowerMap[deviceUuid] = DevicePower{CurrentPower: dev.CurrentPower, ProductName: dev2.Device.ProductName}
 				}

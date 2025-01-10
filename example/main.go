@@ -23,6 +23,7 @@ import (
 const LOG_FILE = "sensonet.log"
 const TOKEN_FILE = ".sensonet-token.json"
 const CREDENTIALS_FILE = ".sensonet-credentials.json"
+const SYSTEM_DEVICE_FILE = ".sensonet-systemdevices.json"
 const WITH_SENSONET_LOGGING = true    // Set this to false if you want no sensonet logging
 const WITH_HTTP_CLIENT_LOGGING = true // Set this to false if you want no http client logging in the sensonet library
 
@@ -57,6 +58,14 @@ func writeToken(filename string, token *oauth2.Token) error {
 	return os.WriteFile(filename, b, 0o644)
 }
 
+func writeSystemDeviceInfo(filename string, systemDevices *sensonet.SystemDevices) error {
+	b, err := json.MarshalIndent(systemDevices, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(filename, b, 0o644)
+}
+
 func readKey(input chan rune) {
 	for {
 		char, _, err := keyboard.GetSingleKey()
@@ -78,6 +87,7 @@ func printKeyBinding() {
 	fmt.Println("   8 = Stop zone quick veto")
 	fmt.Println("   9 = Stop strategy based quick mode")
 	fmt.Println("   0 = Read mpc data")
+	fmt.Println("   d = Write system device info to file")
 	fmt.Println("   h = Show key bindings")
 	fmt.Println("   q = Quit")
 	fmt.Println("#############################################")
@@ -346,14 +356,14 @@ func main() {
 				} else {
 					logger.Println("result of function GetMpcData()=", result)
 				}
-				systemCurrentPower, err := ctrl.SystemCurrentPower(systemId)
+				systemCurrentPower, err := ctrl.GetSystemCurrentPower(systemId)
 				if err != nil {
 					fmt.Println(" An error occurred. ", err)
 					logger.Println(err)
 				} else {
 					fmt.Println("Current power consumption of system=", systemCurrentPower)
 				}
-				devicePowerMap, err := ctrl.DeviceCurrentPower(systemId, "All")
+				devicePowerMap, err := ctrl.GetDeviceCurrentPower(systemId, "All")
 				if err != nil {
 					fmt.Println(" An error occurred. ", err)
 					logger.Println(err)
@@ -361,6 +371,18 @@ func main() {
 					fmt.Println("Current power consumption of all devices of the system:")
 					for _, el := range devicePowerMap {
 						fmt.Printf("   Device: %-35s Current power: %5.0fW \n", el.ProductName, el.CurrentPower)
+					}
+				}
+			case i == rune('d'):
+				fmt.Println("Writing device info to file")
+				result, err := ctrl.GetSystemDevices(systemId)
+				if err != nil {
+					fmt.Println(" An error occurred. ", err)
+					logger.Println(err)
+				} else {
+					// Store the system device information in a file
+					if err := writeSystemDeviceInfo(SYSTEM_DEVICE_FILE, &result); err != nil {
+						logger.Fatal(err)
 					}
 				}
 			case i == rune('h'):

@@ -193,7 +193,7 @@ func (c *Connection) GetMpcData(systemId string) (MpcData, error) {
 }
 
 // Returns the current power consumption for systemId
-func (c *Connection) SystemCurrentPower(systemId string) (float64, error) {
+func (c *Connection) GetSystemCurrentPower(systemId string) (float64, error) {
 	mpcData, err := c.GetMpcData(systemId)
 	if err != nil || len(mpcData.Devices) < 1 {
 		return -1.0, err
@@ -206,7 +206,7 @@ func (c *Connection) SystemCurrentPower(systemId string) (float64, error) {
 }
 
 // Returns the current power consumption and product name for deviceUuid. If "All" is given as deviceUuid, then the function return the power consumption and product name for all devices of systemId
-func (c *Connection) DeviceCurrentPower(systemId, deviceUuid string) (DevicePowerMap, error) {
+func (c *Connection) GetDeviceCurrentPower(systemId, deviceUuid string) (DevicePowerMap, error) {
 	devicePowerMap := make(DevicePowerMap)
 	if deviceUuid == "All" {
 		devicePowerMap["All"] = DevicePower{CurrentPower: -1.0, ProductName: "All Devices"}
