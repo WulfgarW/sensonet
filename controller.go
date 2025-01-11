@@ -88,7 +88,7 @@ func NewController(conn *Connection, opts ...CtrlOption) (*Controller, error) {
 		for i, home := range homes {
 			var systemMpcData SystemMpcData
 			systemMpcData.SystemId = home.SystemID
-			systemMpcData.MpcData, err = ctrl.conn.GetMpcData(home.SystemID)
+			systemMpcData.MpcData.Devices, err = ctrl.conn.GetMpcData(home.SystemID)
 			if err != nil {
 				return res, err
 			}
@@ -172,18 +172,18 @@ func (c *Controller) GetEnergyData(systemId, deviceUuid, operationMode, energyTy
 }
 
 // Returns the mpc data for systemId
-func (c *Controller) GetMpcData(systemId string) (MpcData, error) {
+func (c *Controller) GetMpcData(systemId string) ([]MpcDevice, error) {
 	var mpcData MpcData
 	allSystemMpcData, err := c.systemMpcDataCache.Get()
 	if err != nil {
-		return mpcData, err
+		return mpcData.Devices, err
 	}
 	for _, systemMpcData := range allSystemMpcData.SystemMpcData {
 		if systemMpcData.SystemId == systemId {
-			return systemMpcData.MpcData, err
+			return systemMpcData.MpcData.Devices, err
 		}
 	}
-	return mpcData, fmt.Errorf("no mpc data found for system %s", systemId)
+	return mpcData.Devices, fmt.Errorf("no mpc data found for system %s", systemId)
 }
 
 // Returns the system devices for a specific systemId
@@ -203,12 +203,12 @@ func (c *Controller) GetSystemDevices(systemId string) (SystemDevices, error) {
 
 // Returns the current power consumption for systemId
 func (c *Controller) GetSystemCurrentPower(systemId string) (float64, error) {
-	mpcData, err := c.GetMpcData(systemId)
-	if err != nil || len(mpcData.Devices) < 1 {
+	mpcDevices, err := c.GetMpcData(systemId)
+	if err != nil || len(mpcDevices) < 1 {
 		return -1.0, err
 	}
 	totalPower := 0.0
-	for _, dev := range mpcData.Devices {
+	for _, dev := range mpcDevices {
 		totalPower = totalPower + dev.CurrentPower
 	}
 	return totalPower, nil
@@ -220,24 +220,21 @@ func (c *Controller) GetDeviceCurrentPower(systemId, deviceUuid string) (DeviceP
 	if deviceUuid == "All" {
 		devicePowerMap["All"] = DevicePower{CurrentPower: -1.0, ProductName: "All Devices"}
 	}
-	mpcData, err := c.GetMpcData(systemId)
-	if err != nil || len(mpcData.Devices) < 1 {
+	mpcDevices, err := c.GetMpcData(systemId)
+	if err != nil || len(mpcDevices) < 1 {
 		return devicePowerMap, err
 	}
 	devices, err := c.GetDeviceData(systemId, DEVICES_ALL)
 	if err != nil {
 		return devicePowerMap, err
 	}
-	c.debug("In DeviceCurrentPower: mpcData=", mpcData)
-	c.debug("In DeviceCurrentPower: devices=", devices)
 	totalPower := 0.0
-	for _, dev := range mpcData.Devices {
+	for _, dev := range mpcDevices {
 		totalPower = totalPower + dev.CurrentPower
 		if dev.DeviceID == deviceUuid || deviceUuid == "All" {
 			for _, dev2 := range devices {
-				c.debug("In DeviceCurrentPower: dev.DeviceID=", dev.DeviceID, " DeviceUUID=", dev2.Device.DeviceUUID)
 				if dev.DeviceID == dev2.Device.DeviceUUID {
-					devicePowerMap[deviceUuid] = DevicePower{CurrentPower: dev.CurrentPower, ProductName: dev2.Device.ProductName}
+					devicePowerMap[dev.DeviceID] = DevicePower{CurrentPower: dev.CurrentPower, ProductName: dev2.Device.ProductName}
 				}
 			}
 		}
