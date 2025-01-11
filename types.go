@@ -395,10 +395,12 @@ type AllSystemDevices struct {
 }
 
 type MpcData struct {
-	Devices []struct {
-		DeviceID     string  `json:"deviceId"`
-		CurrentPower float64 `json:"currentPower"`
-	} `json:"devices"`
+	Devices []MpcDevice `json:"devices"`
+}
+
+type MpcDevice struct {
+	DeviceID     string  `json:"deviceId"`
+	CurrentPower float64 `json:"currentPower"`
 }
 
 type SystemMpcData struct {
