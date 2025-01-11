@@ -181,25 +181,25 @@ func (c *Connection) GetEnergyData(systemId, deviceUuid, operationMode, energyTy
 }
 
 // Returns the mpc data for systemId
-func (c *Connection) GetMpcData(systemId string) (MpcData, error) {
+func (c *Connection) GetMpcData(systemId string) ([]MpcDevice, error) {
 	var mpcData MpcData
 
 	url := API_URL_BASE + fmt.Sprintf(MPC_URL, systemId)
 	req, _ := http.NewRequest("GET", url, nil)
 	if err := doJSON(c.client, req, &mpcData); err != nil {
-		return mpcData, err
+		return mpcData.Devices, err
 	}
-	return mpcData, nil
+	return mpcData.Devices, nil
 }
 
 // Returns the current power consumption for systemId
 func (c *Connection) GetSystemCurrentPower(systemId string) (float64, error) {
-	mpcData, err := c.GetMpcData(systemId)
-	if err != nil || len(mpcData.Devices) < 1 {
+	mpcDevices, err := c.GetMpcData(systemId)
+	if err != nil || len(mpcDevices) < 1 {
 		return -1.0, err
 	}
 	totalPower := 0.0
-	for _, dev := range mpcData.Devices {
+	for _, dev := range mpcDevices {
 		totalPower = totalPower + dev.CurrentPower
 	}
 	return totalPower, nil
@@ -211,8 +211,8 @@ func (c *Connection) GetDeviceCurrentPower(systemId, deviceUuid string) (DeviceP
 	if deviceUuid == "All" {
 		devicePowerMap["All"] = DevicePower{CurrentPower: -1.0, ProductName: "All Devices"}
 	}
-	mpcData, err := c.GetMpcData(systemId)
-	if err != nil || len(mpcData.Devices) < 1 {
+	mpcDevices, err := c.GetMpcData(systemId)
+	if err != nil || len(mpcDevices) < 1 {
 		return devicePowerMap, err
 	}
 	devices, err := c.GetDeviceData(systemId, DEVICES_ALL)
@@ -220,7 +220,7 @@ func (c *Connection) GetDeviceCurrentPower(systemId, deviceUuid string) (DeviceP
 		return devicePowerMap, err
 	}
 	totalPower := 0.0
-	for _, dev := range mpcData.Devices {
+	for _, dev := range mpcDevices {
 		totalPower = totalPower + dev.CurrentPower
 		if dev.DeviceID == deviceUuid || deviceUuid == "All" {
 			for _, dev2 := range devices {
