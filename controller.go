@@ -228,16 +228,13 @@ func (c *Controller) GetDeviceCurrentPower(systemId, deviceUuid string) (DeviceP
 	if err != nil {
 		return devicePowerMap, err
 	}
-	c.debug("In DeviceCurrentPower: mpcData=", mpcData)
-	c.debug("In DeviceCurrentPower: devices=", devices)
 	totalPower := 0.0
 	for _, dev := range mpcData.Devices {
 		totalPower = totalPower + dev.CurrentPower
 		if dev.DeviceID == deviceUuid || deviceUuid == "All" {
 			for _, dev2 := range devices {
-				c.debug("In DeviceCurrentPower: dev.DeviceID=", dev.DeviceID, " DeviceUUID=", dev2.Device.DeviceUUID)
 				if dev.DeviceID == dev2.Device.DeviceUUID {
-					devicePowerMap[deviceUuid] = DevicePower{CurrentPower: dev.CurrentPower, ProductName: dev2.Device.ProductName}
+					devicePowerMap[dev.DeviceID] = DevicePower{CurrentPower: dev.CurrentPower, ProductName: dev2.Device.ProductName}
 				}
 			}
 		}

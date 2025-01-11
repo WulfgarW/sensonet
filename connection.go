@@ -225,7 +225,7 @@ func (c *Connection) GetDeviceCurrentPower(systemId, deviceUuid string) (DeviceP
 		if dev.DeviceID == deviceUuid || deviceUuid == "All" {
 			for _, dev2 := range devices {
 				if dev.DeviceID == dev2.Device.DeviceUUID {
-					devicePowerMap[deviceUuid] = DevicePower{CurrentPower: dev.CurrentPower, ProductName: dev2.Device.ProductName}
+					devicePowerMap[dev.DeviceID] = DevicePower{CurrentPower: dev.CurrentPower, ProductName: dev2.Device.ProductName}
 				}
 			}
 		}
