@@ -332,6 +332,8 @@ func (c *Controller) StartStrategybased(systemId string, strategy int, heatingPa
 	c.refreshCurrentQuickMode(&state)
 	// Extracting correct State.Dhw element
 	dhwData := GetDhwData(state, hotwaterPar.Index)
+	// Extracting correct State.Dhw element
+	domesticHotWaterData := GetDomesticHotWaterData(state, hotwaterPar.Index)
 	// Extracting correct State.Zone element
 	zoneData := GetZoneData(state, heatingPar.ZoneIndex)
 
@@ -339,11 +341,12 @@ func (c *Controller) StartStrategybased(systemId string, strategy int, heatingPa
 		c.debug(fmt.Sprint("System is already in quick mode:", c.currentQuickmode))
 		c.debug("Is there any need to change that?")
 		c.debug(fmt.Sprint("Special Function of Dhw: ", dhwData.State.CurrentSpecialFunction))
+		c.debug(fmt.Sprint("Operationg Mode of DomesticHotWater: ", domesticHotWaterData.State.CurrentSpecialFunction))
 		c.debug(fmt.Sprint("Special Function of Heating Zone: ", zoneData.State.CurrentSpecialFunction))
 		return QUICKMODE_ERROR_ALREADYON, err
 	}
 
-	whichQuickMode := c.WhichQuickMode(dhwData, zoneData, strategy, heatingPar, hotwaterPar)
+	whichQuickMode := c.WhichQuickMode(dhwData, domesticHotWaterData, zoneData, strategy, heatingPar, hotwaterPar)
 	c.debug(fmt.Sprint("whichQuickMode=", whichQuickMode))
 
 	switch whichQuickMode {
@@ -394,10 +397,13 @@ func (c *Controller) StopStrategybased(systemId string, heatingPar *HeatingParSt
 	c.refreshCurrentQuickMode(&state)
 	// Extracting correct State.Dhw element
 	dhwData := GetDhwData(state, hotwaterPar.Index)
+	// Extracting correct State.Dhw element
+	domesticHotWaterData := GetDomesticHotWaterData(state, hotwaterPar.Index)
 	// Extracting correct State.Zone element
 	zoneData := GetZoneData(state, heatingPar.ZoneIndex)
 
 	c.debug(fmt.Sprint("Operationg Mode of Dhw: ", dhwData.State.CurrentSpecialFunction))
+	c.debug(fmt.Sprint("Operationg Mode of DomesticHotWater: ", domesticHotWaterData.State.CurrentSpecialFunction))
 	c.debug(fmt.Sprint("Operationg Mode of Heating: ", zoneData.State.CurrentSpecialFunction))
 
 	switch c.currentQuickmode {
@@ -425,7 +431,7 @@ func (c *Controller) StopStrategybased(systemId string, heatingPar *HeatingParSt
 
 // This function checks the operation mode of heating and hotwater and the hotwater live temperature
 // and returns, which quick mode should be started, when evcc sends an "Enable"
-func (c *Controller) WhichQuickMode(dhwData *DhwData, zoneData *ZoneData, strategy int, heatingPar *HeatingParStruct, hotwater *HotwaterParStruct) int {
+func (c *Controller) WhichQuickMode(dhwData *DhwData, domesticHotWaterData *DomesticHotWaterData, zoneData *ZoneData, strategy int, heatingPar *HeatingParStruct, hotwater *HotwaterParStruct) int {
 	//c.debug(fmt.Sprint("Strategy = ", strategy))
 	// For strategy=STRATEGY_HOTWATER, a hotwater boost is possible when hotwater storage temperature is less than the temperature setpoint.
 	// For other strategies, a hotwater boost is possible when hotwater storage temperature is less than the temperature setpoint minus 5°C
@@ -437,6 +443,12 @@ func (c *Controller) WhichQuickMode(dhwData *DhwData, zoneData *ZoneData, strate
 	if dhwData != nil {
 		if dhwData.State.CurrentDhwTemperature < dhwData.Configuration.TappingSetpoint+addOn &&
 			dhwData.Configuration.OperationModeDhw == OPERATIONMODE_TIME_CONTROLLED {
+			hotWaterBoostPossible = true
+		}
+	}
+	if domesticHotWaterData != nil {
+		if domesticHotWaterData.State.CurrentDomesticHotWaterTemperature < domesticHotWaterData.Configuration.TappingSetpoint+addOn &&
+			domesticHotWaterData.Configuration.OperationModeDomesticHotWater == OPERATIONMODE_TIME_CONTROLLED {
 			hotWaterBoostPossible = true
 		}
 	}
