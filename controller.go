@@ -250,13 +250,19 @@ func (c *Controller) GetCurrentQuickMode() string {
 func (c *Controller) refreshCurrentQuickMode(state *SystemStatus) {
 	newQuickMode := ""
 	for _, dhw := range state.State.Dhw {
-		if dhw.CurrentSpecialFunction == "CYLINDER_BOOST" {
+		if dhw.CurrentSpecialFunction == SPECIAL_FUNCTION_HOTWATER_BOOST {
+			newQuickMode = QUICKMODE_HOTWATER
+			break
+		}
+	}
+	for _, domesticHotWater := range state.State.DomesticHotWater {
+		if domesticHotWater.CurrentSpecialFunction == SPECIAL_FUNCTION_HOTWATER_BOOST {
 			newQuickMode = QUICKMODE_HOTWATER
 			break
 		}
 	}
 	for _, zone := range state.State.Zones {
-		if zone.CurrentSpecialFunction == "QUICK_VETO" {
+		if zone.CurrentSpecialFunction == SPECIAL_FUNCTION_QUICK_VETO {
 			newQuickMode = QUICKMODE_HEATING
 			break
 		}

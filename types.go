@@ -8,30 +8,32 @@ const (
 	CLIENT_ID    = "myvaillant"
 	REDIRECT_URL = "enduservaillant.page.link://login"
 
-	AUTH_BASE_URL = "https://identity.vaillant-group.com/auth/realms"
-	LOGIN_URL     = AUTH_BASE_URL + "/%s/login-actions/authenticate"
-	TOKEN_URL     = AUTH_BASE_URL + "/%s/protocol/openid-connect/token"
-	AUTH_URL      = AUTH_BASE_URL + "/%s/protocol/openid-connect/auth"
-	API_URL_BASE  = "https://api.vaillant-group.com/service-connected-control/end-user-app-api/v1"
-)
-
-const (
+	AUTH_BASE_URL     = "https://identity.vaillant-group.com/auth/realms"
+	LOGIN_URL         = AUTH_BASE_URL + "/%s/login-actions/authenticate"
+	TOKEN_URL         = AUTH_BASE_URL + "/%s/protocol/openid-connect/token"
+	AUTH_URL          = AUTH_BASE_URL + "/%s/protocol/openid-connect/auth"
+	API_URL_BASE      = "https://api.vaillant-group.com/service-connected-control/end-user-app-api/v1"
 	HOTWATERBOOST_URL = "/systems/%s/tli/domestic-hot-water/%01d/boost"
 	ZONEQUICKVETO_URL = "/systems/%s/tli/zones/%01d/quick-veto"
 	SYSTEMS_URL       = "/systems/%s/tli"
 	DEVICES_URL       = "/emf/v2/%s/currentSystem"
 	ENERGY_URL        = "/emf/v2/%s/devices/%s/buckets?"
 	MPC_URL           = "/hem/%s/mpc"
+)
 
+const (
 	HOTWATERINDEX_DEFAULT                = 255
 	ZONEINDEX_DEFAULT                    = 0
 	ZONEVETOSETPOINT_DEFAULT             = 20.0
-	ZONEVETODURATION_DEFAULT             = 0.5
+	ZONEVETODURATION_DEFAULT             = 3.0 // 3 hours as default
 	OPERATIONMODE_TIME_CONTROLLED string = "TIME_CONTROLLED"
 	QUICKMODE_HOTWATER            string = "Hotwater Boost"
 	QUICKMODE_HEATING             string = "Heating Quick Veto"
 	QUICKMODE_NOTHING             string = "Charger running idle"
 	QUICKMODE_ERROR_ALREADYON     string = "Error. A quickmode is already running"
+
+	SPECIAL_FUNCTION_QUICK_VETO     = "QUICK_VETO"
+	SPECIAL_FUNCTION_HOTWATER_BOOST = "CYLINDER_BOOST"
 )
 
 const (
