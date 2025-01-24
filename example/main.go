@@ -415,7 +415,11 @@ func main() {
 				}
 				dhwData := sensonet.GetDhwData(state, -1)
 				zoneData := sensonet.GetZoneData(state, heatingPar.ZoneIndex)
-				fmt.Printf("   Quickmodes: internal: \"%s\"  heat pump: Dhw: \"%s\"  Zone: \"%s\"\n", ctrl.GetCurrentQuickMode(), dhwData.State.CurrentSpecialFunction, zoneData.State.CurrentSpecialFunction)
+				quickModeExpiresAt := ctrl.GetQuickModeExpiresAt()
+				if quickModeExpiresAt == "" {
+					quickModeExpiresAt = "(unknown)"
+				}
+				fmt.Printf("   Quickmodes: internal: \"%s\" until %s. Heat pump: Dhw: \"%s\"  Zone: \"%s\"\n", ctrl.GetCurrentQuickMode(), quickModeExpiresAt, dhwData.State.CurrentSpecialFunction, zoneData.State.CurrentSpecialFunction)
 				fmt.Println("---------------------------------------------------------------------------------------------------------------------")
 				lastPrint = time.Now()
 

@@ -15,6 +15,7 @@ type Controller struct {
 	currentQuickmode   string
 	quickmodeStarted   time.Time
 	quickmodeStopped   time.Time
+	quickModeExpiresAt string
 }
 
 const CACHE_DURATION_HOMES = 1800
@@ -25,9 +26,10 @@ const CACHE_DURATION_MPCDATA = 90
 // NewController creates a new Sensonet controller.
 func NewController(conn *Connection, opts ...CtrlOption) (*Controller, error) {
 	ctrl := &Controller{
-		conn:             conn,
-		quickmodeStarted: time.Now(),
-		quickmodeStopped: time.Now().Add(-2 * time.Minute), // time stamp is set in the past so that first call of refreshCurrentQuickMode() changes currentQuickmode if necessary
+		conn:               conn,
+		quickmodeStarted:   time.Now(),
+		quickmodeStopped:   time.Now().Add(-2 * time.Minute), // time stamp is set in the past so that first call of refreshCurrentQuickMode() changes currentQuickmode if necessary
+		quickModeExpiresAt: "",
 	}
 
 	for _, opt := range opts {
@@ -247,6 +249,10 @@ func (c *Controller) GetCurrentQuickMode() string {
 	return c.currentQuickmode
 }
 
+func (c *Controller) GetQuickModeExpiresAt() string {
+	return c.quickModeExpiresAt
+}
+
 func (c *Controller) refreshCurrentQuickMode(state *SystemStatus) {
 	newQuickMode := ""
 	for _, dhw := range state.State.Dhw {
@@ -356,6 +362,7 @@ func (c *Controller) StartStrategybased(systemId string, strategy int, heatingPa
 			c.currentQuickmode = QUICKMODE_HOTWATER
 			c.quickmodeStarted = time.Now()
 			c.debug("Starting hotwater boost")
+			c.quickModeExpiresAt = ""
 		}
 	case 2:
 		err = c.StartZoneQuickVeto(systemId, heatingPar.ZoneIndex, heatingPar.VetoSetpoint, heatingPar.VetoDuration)
@@ -363,6 +370,11 @@ func (c *Controller) StartStrategybased(systemId string, strategy int, heatingPa
 			c.currentQuickmode = QUICKMODE_HEATING
 			c.quickmodeStarted = time.Now()
 			c.debug("Starting zone quick veto")
+			if heatingPar.VetoDuration < 0.0 {
+				c.quickModeExpiresAt = (time.Now().Add(time.Duration(int64(ZONEVETODURATION_DEFAULT*60) * int64(time.Minute)))).Format("15:04")
+			} else {
+				c.quickModeExpiresAt = (time.Now().Add(time.Duration(int64(heatingPar.VetoDuration*60) * int64(time.Minute)))).Format("15:04")
+			}
 		}
 	default:
 		if c.currentQuickmode == QUICKMODE_HOTWATER {
@@ -381,6 +393,7 @@ func (c *Controller) StartStrategybased(systemId string, strategy int, heatingPa
 		}
 		c.currentQuickmode = QUICKMODE_NOTHING
 		c.quickmodeStarted = time.Now()
+		c.quickModeExpiresAt = (time.Now().Add(time.Duration(10 * time.Minute))).Format("15:04")
 		c.debug("Enable called but no quick mode possible. Starting idle mode")
 	}
 
@@ -423,6 +436,7 @@ func (c *Controller) StopStrategybased(systemId string, heatingPar *HeatingParSt
 		c.debug("Nothing to do, no quick mode active")
 	}
 	c.currentQuickmode = ""
+	c.quickModeExpiresAt = ""
 	c.quickmodeStopped = time.Now()
 
 	c.systemsCache.Reset()
