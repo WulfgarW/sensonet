@@ -274,7 +274,7 @@ func (c *Controller) refreshCurrentQuickMode(state *SystemStatus) {
 		}
 	}
 	if newQuickMode != c.currentQuickmode {
-		if newQuickMode == "" && time.Now().After(c.quickmodeStarted.Add(CACHE_DURATION_SYSTEMS)) {
+		if newQuickMode == "" && time.Now().After(c.quickmodeStarted.Add(2*CACHE_DURATION_SYSTEMS*time.Second)) {
 			if c.currentQuickmode == QUICKMODE_NOTHING && time.Now().Before(c.quickmodeStarted.Add(10*time.Minute)) {
 				c.debug("Idle mode active for less then 10 minutes. Keeping the idle mode")
 			} else {
@@ -283,7 +283,7 @@ func (c *Controller) refreshCurrentQuickMode(state *SystemStatus) {
 				c.quickmodeStopped = time.Now()
 			}
 		}
-		if newQuickMode != "" && time.Now().After(c.quickmodeStopped.Add(CACHE_DURATION_SYSTEMS)) {
+		if newQuickMode != "" && time.Now().After(c.quickmodeStopped.Add(2*CACHE_DURATION_SYSTEMS*time.Second)) {
 			c.debug(fmt.Sprintf("Old quickmode: \"%s\"   New quickmode: \"%s\"", c.currentQuickmode, newQuickMode))
 			c.currentQuickmode = newQuickMode
 			c.quickmodeStarted = time.Now()
