@@ -346,8 +346,12 @@ func (c *Controller) StartStrategybased(systemId string, strategy int, heatingPa
 	if c.currentQuickmode != "" {
 		c.debug(fmt.Sprint("System is already in quick mode:", c.currentQuickmode))
 		c.debug("Is there any need to change that?")
-		c.debug(fmt.Sprint("Special Function of Dhw: ", dhwData.State.CurrentSpecialFunction))
-		c.debug(fmt.Sprint("Operationg Mode of DomesticHotWater: ", domesticHotWaterData.State.CurrentSpecialFunction))
+		if dhwData != nil {
+			c.debug(fmt.Sprint("Special Function of Dhw: ", dhwData.State.CurrentSpecialFunction))
+		}
+		if domesticHotWaterData != nil {
+			c.debug(fmt.Sprint("Operationg Mode of DomesticHotWater: ", domesticHotWaterData.State.CurrentSpecialFunction))
+		}
 		c.debug(fmt.Sprint("Special Function of Heating Zone: ", zoneData.State.CurrentSpecialFunction))
 		return QUICKMODE_ERROR_ALREADYON, err
 	}
@@ -415,8 +419,12 @@ func (c *Controller) StopStrategybased(systemId string, heatingPar *HeatingParSt
 	// Extracting correct State.Zone element
 	zoneData := GetZoneData(state, heatingPar.ZoneIndex)
 
-	c.debug(fmt.Sprint("Operationg Mode of Dhw: ", dhwData.State.CurrentSpecialFunction))
-	c.debug(fmt.Sprint("Operationg Mode of DomesticHotWater: ", domesticHotWaterData.State.CurrentSpecialFunction))
+	if dhwData != nil {
+		c.debug(fmt.Sprint("Operationg Mode of Dhw: ", dhwData.State.CurrentSpecialFunction))
+	}
+	if domesticHotWaterData != nil {
+		c.debug(fmt.Sprint("Operationg Mode of DomesticHotWater: ", domesticHotWaterData.State.CurrentSpecialFunction))
+	}
 	c.debug(fmt.Sprint("Operationg Mode of Heating: ", zoneData.State.CurrentSpecialFunction))
 
 	switch c.currentQuickmode {
