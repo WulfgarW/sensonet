@@ -8,7 +8,7 @@ import (
 type Controller struct {
 	conn               *Connection
 	logger             Logger
-	homesCache         Cacheable[Homes]
+	homesCache         Cacheable[[]Home]
 	systemsCache       Cacheable[AllSystems]
 	systemDevicesCache Cacheable[AllSystemDevices]
 	systemMpcDataCache Cacheable[AllSystemMpcData]
@@ -36,7 +36,7 @@ func NewController(conn *Connection, opts ...CtrlOption) (*Controller, error) {
 		opt(ctrl)
 	}
 
-	ctrl.homesCache = ResettableCached(func() (Homes, error) {
+	ctrl.homesCache = ResettableCached(func() ([]Home, error) {
 		//var res Homes
 		res, err := ctrl.conn.GetHomes()
 		return res, err
@@ -113,7 +113,7 @@ func (c *Controller) debug(fmt string, arg ...any) {
 }
 
 // Returns all "homes" that belong to the current user under the myVaillant portal
-func (c *Controller) GetHomes() (Homes, error) {
+func (c *Controller) GetHomes() ([]Home, error) {
 	homes, err := c.homesCache.Get()
 	if err != nil {
 		return nil, err

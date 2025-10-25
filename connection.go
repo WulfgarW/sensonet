@@ -38,8 +38,8 @@ func NewConnection(ts oauth2.TokenSource, opts ...ConnOption) (*Connection, erro
 }
 
 // Returns all "homes" that belong to the current user under the myVaillant portal
-func (c *Connection) GetHomes() (Homes, error) {
-	var res Homes
+func (c *Connection) GetHomes() ([]Home, error) {
+	var res []Home
 	url := API_URL_BASE + "/homes"
 	req, _ := http.NewRequest("GET", url, nil)
 	err := doJSON(c.client, req, &res)
