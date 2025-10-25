@@ -79,7 +79,6 @@ type HotwaterParStruct struct {
 type Homes []Home
 
 type Home struct {
-	//	type Homes []struct {
 	HomeName string `json:"homeName"`
 	Address  struct {
 		Street      string `json:"street"`
