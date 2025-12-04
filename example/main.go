@@ -254,8 +254,20 @@ func main() {
 	if err != nil {
 		logger.Fatal(err)
 	}
-	// We use the system ID of the first element (=index 0) of homes[]
-	systemId := homes[0].SystemID
+	systemId := ""
+	if credentials.HomeName != "" {
+		// Searching for the Homes[] element with the HomeName provided with credentials
+		for _, h := range homes {
+			if h.HomeName == credentials.HomeName {
+				systemId = h.SystemID
+				break
+			}
+		}
+	}
+	if systemId == "" {
+		// If no HomeName was provided, we use the system ID of the first element (=index 0) of homes[]
+		systemId = homes[0].SystemID
+	}
 
 	var heatingPar sensonet.HeatingParStruct
 	var hotwaterPar sensonet.HotwaterParStruct

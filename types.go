@@ -64,6 +64,7 @@ type CredentialsStruct struct {
 	User     string `json:"user"`
 	Password string `json:"password"`
 	Realm    string `json:"realm"`
+	HomeName string `json:"homeName"` // optional parameter, if several homes are defined under one account
 }
 
 type HeatingParStruct struct {
