@@ -78,7 +78,7 @@ func (e StatusError) StatusCode() int {
 
 // ResponseError turns an HTTP status code into an error
 func ResponseError(resp *http.Response) error {
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
 		return StatusError{resp: resp}
 	}
 	return nil
@@ -91,7 +91,7 @@ func ReadBody(resp *http.Response) ([]byte, error) {
 	if err != nil {
 		return []byte{}, err
 	}
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
 		return b, StatusError{resp: resp}
 	}
 	return b, nil
